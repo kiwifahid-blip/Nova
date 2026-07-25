@@ -254,6 +254,9 @@ onValue(currentChatRef, (snapshot) => {
 
   if (!msg || !msg.text) return;
 
+  // Ignore messages older than 5 seconds
+  if (Date.now() - msg.timestamp > 5000) return;
+
   if (IGNORED_KEYS.includes(msg.text.trim())) return;
 
   const item = document.createElement("div");
@@ -276,6 +279,7 @@ chatForm.addEventListener("submit", (e) => {
 
   const username = currentUser.displayName || currentUser.email.split("@")[0];
 
+  // Send message to Firebase
   set(currentChatRef, {
     username: username,
     text: text,
@@ -288,6 +292,11 @@ chatForm.addEventListener("submit", (e) => {
 
   chatInput.value = "";
   chatInput.blur(); 
+
+  // Clear message from database after 4 seconds
+  setTimeout(() => {
+    set(currentChatRef, null);
+  }, 4000);
 });
 
 
