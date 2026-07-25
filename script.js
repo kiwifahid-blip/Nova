@@ -329,6 +329,25 @@ const pauseMenu = document.getElementById("pause-menu");
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
 
+// Preload Character Sprites
+const idle1Sprite = new Image();
+idle1Sprite.src = "Idle1.png";
+
+const idle2Sprite = new Image();
+idle2Sprite.src = "Idle2.png";
+
+const walk1Sprite = new Image();
+walk1Sprite.src = "Walk1.png";
+
+const walk2Sprite = new Image();
+walk2Sprite.src = "Walk2.png";
+
+// Animation State Trackers
+let animTimer = 0;
+let walkFrame = 1;
+let idleFrame = 1;
+let facingRight = true;
+
 let gameAnimationId = null;
 let isGamePlaying = false;
 let isPaused = false;
@@ -364,6 +383,7 @@ function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 }
+
 window.addEventListener("resize", () => {
   if (isGamePlaying) resizeCanvas();
 });
@@ -478,9 +498,11 @@ function updateGame() {
 
   if (keys.a || keys.ArrowLeft) {
     player.velocityX = -player.speed;
+    facingRight = false;
     moved = true;
   } else if (keys.d || keys.ArrowRight) {
     player.velocityX = player.speed;
+    facingRight = true;
     moved = true;
   } else {
     player.velocityX = 0;
@@ -513,7 +535,7 @@ function updateGame() {
 }
 
 function drawGame() {
-  // Sky
+  // Sky Background
   ctx.fillStyle = "#70c5ce";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -531,12 +553,29 @@ function drawGame() {
   ctx.fillStyle = "#2e8b57";
   ctx.fillRect(0, canvas.height - groundHeight, canvas.width, 20);
 
+  // Sprite Animation Frame Selection
+  animTimer++;
+  const isMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
+  let activeSprite;
+
+  if (isMoving) {
+    if (animTimer % 8 === 0) {
+      walkFrame = (walkFrame === 1) ? 2 : 1;
+    }
+    activeSprite = (walkFrame === 1) ? walk1Sprite : walk2Sprite;
+  } else {
+    if (animTimer % 30 === 0) {
+      idleFrame = (idleFrame === 1) ? 2 : 1;
+    }
+    activeSprite = (idleFrame === 1) ? idle1Sprite : idle2Sprite;
+  }
+
   // Render Other Connected Players
   const now = Date.now();
   Object.keys(otherPlayers).forEach(uid => {
     if (currentUser && uid === currentUser.uid) return;
     const p = otherPlayers[uid];
-    drawCharacter(p.x, p.y, p.username, "#00ffff");
+    drawCharacter(p.x, p.y, p.username, activeSprite, true);
 
     if (p.lastMsg && !IGNORED_KEYS.includes(p.lastMsg) && now - p.msgTimestamp < 4000) {
       drawSpeechBubble(p.x + 30, p.y - 10, p.lastMsg);
@@ -545,40 +584,34 @@ function drawGame() {
 
   // Render Local Player
   const myName = currentUser ? (currentUser.displayName || currentUser.email.split("@")[0]) : "You";
-  drawCharacter(player.x, player.y, myName, "#00ffff");
+  drawCharacter(player.x, player.y, myName, activeSprite, facingRight);
 
   if (myLastMessage && !IGNORED_KEYS.includes(myLastMessage) && now - myMessageTime < 4000) {
     drawSpeechBubble(player.x + 30, player.y - 10, myLastMessage);
   }
 }
 
-function drawCharacter(px, py, username, shirtColor) {
+function drawCharacter(px, py, username, spriteImg, isFacingRight = true) {
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 14px monospace";
   ctx.textAlign = "center";
   ctx.fillText(username, px + 30, py - 10);
 
-  // Head
-  ctx.fillStyle = "#ffcc99";
-  ctx.fillRect(px + 12, py, 36, 26);
+  ctx.save();
 
-  // Eyes
-  ctx.fillStyle = "#000000";
-  ctx.fillRect(px + 20, py + 8, 6, 6);
-  ctx.fillRect(px + 34, py + 8, 6, 6);
+  if (!isFacingRight) {
+    ctx.translate(px + player.width, py);
+    ctx.scale(-1, 1);
+    if (spriteImg.complete && spriteImg.naturalWidth !== 0) {
+      ctx.drawImage(spriteImg, 0, 0, player.width, player.height);
+    }
+  } else {
+    if (spriteImg.complete && spriteImg.naturalWidth !== 0) {
+      ctx.drawImage(spriteImg, px, py, player.width, player.height);
+    }
+  }
 
-  // Torso / Shirt
-  ctx.fillStyle = shirtColor;
-  ctx.fillRect(px + 12, py + 26, 36, 26);
-
-  // Left & Right Arms
-  ctx.fillStyle = "#ffcc99";
-  ctx.fillRect(px, py + 26, 12, 26);
-  ctx.fillRect(px + 48, py + 26, 12, 26);
-
-  // Pants / Feet
-  ctx.fillStyle = "#002b80";
-  ctx.fillRect(px + 12, py + 52, 36, 18);
+  ctx.restore();
 }
 
 function drawSpeechBubble(centerX, topY, text) {
