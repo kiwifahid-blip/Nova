@@ -60,6 +60,9 @@ const friendsBox = document.getElementById("friends-box");
 let isSignUp = true; 
 let currentUser = null;
 
+// SET THE ORIGINAL CREATOR OF THE GAME HERE
+const ORIGINAL_GAME_CREATOR = "898"; 
+
 toggleAuthMode.addEventListener("click", () => {
   isSignUp = !isSignUp;
   if (isSignUp) {
@@ -101,15 +104,11 @@ authBtn.addEventListener("click", async (e) => {
         return;
       }
       
-      // 1. Create user account
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // 2. Save the username into Firebase Auth Profile immediately
       await updateProfile(userCredential.user, { displayName: username });
       
-      // 3. Update the UI text right away
+      // Update local display for current logged-in user
       usernameDisplay.textContent = username;
-      gameCreatorDisplay.textContent = `@${username}`;
     } else {
       await signInWithEmailAndPassword(auth, email, password);
     }
@@ -138,10 +137,15 @@ onAuthStateChanged(auth, (user) => {
     currentUser = user;
     authScreen.classList.add("hidden");
     
-    // Check for explicit displayName first; fallback to email prefix if not set
+    // Display the logged-in user's name in the header
     const currentUsername = user.displayName || user.email.split("@")[0];
     usernameDisplay.textContent = currentUsername;
-    gameCreatorDisplay.textContent = `@${currentUsername}`;
+
+    // Keep the game creator name fixed to the original creator
+    if (gameCreatorDisplay) {
+      gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+    }
+
     renderFriends([]); 
   } else {
     currentUser = null;
@@ -162,7 +166,7 @@ const activePlayersRef = ref(db, "games/test/activePlayers");
 
 let hasVisitedThisSession = false;
 let otherPlayers = {};
-let lastDbUpdate = 0; // Throttling helper for database performance
+let lastDbUpdate = 0;
 
 onValue(visitsRef, (snapshot) => {
   const count = snapshot.val() || 0;
@@ -206,7 +210,6 @@ function updateMyPositionInDB(force = false) {
   if (!currentUser) return;
 
   const now = Date.now();
-  // Throttle updates to max 20 per second to keep Firebase running smoothly
   if (!force && now - lastDbUpdate < 50) return;
   lastDbUpdate = now;
 
