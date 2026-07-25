@@ -100,8 +100,14 @@ authBtn.addEventListener("click", async (e) => {
         errorMsg.textContent = "Please enter a username!";
         return;
       }
+      
+      // 1. Create user account
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // 2. Save the username into Firebase Auth Profile immediately
       await updateProfile(userCredential.user, { displayName: username });
+      
+      // 3. Update the UI text right away
       usernameDisplay.textContent = username;
       gameCreatorDisplay.textContent = `@${username}`;
     } else {
@@ -131,6 +137,8 @@ onAuthStateChanged(auth, (user) => {
   if (user) {
     currentUser = user;
     authScreen.classList.add("hidden");
+    
+    // Check for explicit displayName first; fallback to email prefix if not set
     const currentUsername = user.displayName || user.email.split("@")[0];
     usernameDisplay.textContent = currentUsername;
     gameCreatorDisplay.textContent = `@${currentUsername}`;
@@ -184,7 +192,7 @@ function enterGamePresence() {
   const playerPresenceRef = ref(db, `games/test/activePlayers/${currentUser.uid}`);
 
   set(playerPresenceRef, {
-    username: currentUser.displayName || "Player",
+    username: currentUser.displayName || currentUser.email.split("@")[0],
     x: player.x,
     y: player.y,
     lastMsg: "",
@@ -198,7 +206,7 @@ function updateMyPositionInDB(force = false) {
   if (!currentUser) return;
 
   const now = Date.now();
-  // Throttle database calls to a maximum of once every 50ms (20 updates/sec)
+  // Throttle updates to max 20 per second to keep Firebase running smoothly
   if (!force && now - lastDbUpdate < 50) return;
   lastDbUpdate = now;
 
@@ -209,7 +217,7 @@ function updateMyPositionInDB(force = false) {
 
   const myPosRef = ref(db, `games/test/activePlayers/${currentUser.uid}`);
   set(myPosRef, {
-    username: currentUser.displayName || "Player",
+    username: currentUser.displayName || currentUser.email.split("@")[0],
     x: Math.round(player.x),
     y: Math.round(player.y),
     lastMsg: myLastMessage,
@@ -225,7 +233,7 @@ function leaveGamePresence() {
 
 
 // ==========================================
-// 4. IN-GAME MULTIPLAYER CHAT LOGIC (SINGLE MESSAGE)
+// 4. IN-GAME MULTIPLAYER CHAT LOGIC
 // ==========================================
 const chatMessagesList = document.getElementById("chat-messages");
 const chatForm = document.getElementById("chat-form");
@@ -235,18 +243,14 @@ let myLastMessage = "";
 let myMessageTime = 0;
 
 const IGNORED_KEYS = ["w", "a", "s", "d", "W", "A", "S", "D"];
-
-// Point directly to a single chat node in Firebase
 const currentChatRef = ref(db, "games/test/currentChat");
 
-// Listen for the 1 active message in Firebase
 onValue(currentChatRef, (snapshot) => {
   const msg = snapshot.val();
   chatMessagesList.innerHTML = "";
 
   if (!msg || !msg.text) return;
 
-  // Ignore movement keys
   if (IGNORED_KEYS.includes(msg.text.trim())) return;
 
   const item = document.createElement("div");
@@ -267,9 +271,8 @@ chatForm.addEventListener("submit", (e) => {
     return;
   }
 
-  const username = currentUser.displayName || "Player";
+  const username = currentUser.displayName || currentUser.email.split("@")[0];
 
-  // Overwrite the currentChat node directly using set()
   set(currentChatRef, {
     username: username,
     text: text,
@@ -538,7 +541,8 @@ function drawGame() {
   });
 
   // Render Local Player
-  drawCharacter(player.x, player.y, currentUser ? (currentUser.displayName || "You") : "You", "#00ffff");
+  const myName = currentUser ? (currentUser.displayName || currentUser.email.split("@")[0]) : "You";
+  drawCharacter(player.x, player.y, myName, "#00ffff");
 
   if (myLastMessage && !IGNORED_KEYS.includes(myLastMessage) && now - myMessageTime < 4000) {
     drawSpeechBubble(player.x + 30, player.y - 10, myLastMessage);
