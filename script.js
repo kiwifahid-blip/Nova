@@ -115,7 +115,7 @@ function renderFriends(friendsArray = []) {
   });
 }
 
-// Auto Session Check
+// Auto Session Check on Startup
 if (supabaseClient) {
   supabaseClient.auth.getSession().then(({ data: { session } }) => {
     if (session) {
@@ -329,7 +329,7 @@ const pauseMenu = document.getElementById("pause-menu");
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
 
-// Load Sprites
+// Character Sprites (Idle & Walk Animations)
 const idle1Sprite = new Image();
 idle1Sprite.crossOrigin = "anonymous";
 idle1Sprite.src = "https://i.imgur.com/GynwpQb.png";
@@ -391,7 +391,7 @@ window.addEventListener("resize", () => {
   if (isGamePlaying) resizeCanvas();
 });
 
-// Safe Keydown Handler
+// Crash-proof Keydown Listener
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && isGamePlaying) {
     if (document.activeElement === chatInput) {
@@ -418,7 +418,7 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// Safe Keyup Handler
+// Crash-proof Keyup Listener
 window.addEventListener("keyup", (e) => {
   if (document.activeElement === chatInput) return;
 
@@ -542,17 +542,15 @@ function updateGame() {
 }
 
 function drawGame() {
-  // Sky Background
+  // Background & Environment
   ctx.fillStyle = "#70c5ce";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Clouds
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(150, 80, 120, 40);
   ctx.fillRect(canvas.width * 0.5, 120, 160, 55);
   ctx.fillRect(canvas.width * 0.8, 60, 110, 35);
 
-  // Ground Dirt & Grass
   const groundHeight = 120;
   ctx.fillStyle = "#8b5a2b";
   ctx.fillRect(0, canvas.height - groundHeight, canvas.width, groundHeight);
@@ -560,7 +558,7 @@ function drawGame() {
   ctx.fillStyle = "#2e8b57";
   ctx.fillRect(0, canvas.height - groundHeight, canvas.width, 20);
 
-  // Sprite Animation Selection
+  // Animation Frame Switching
   animTimer++;
   const isMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
   let activeSprite;
@@ -577,7 +575,7 @@ function drawGame() {
     activeSprite = (idleFrame === 1) ? idle1Sprite : idle2Sprite;
   }
 
-  // Render Other Connected Players
+  // Draw Connected Multiplayer Players
   const now = Date.now();
   Object.keys(otherPlayers).forEach(id => {
     if (currentUser && id === currentUser.id) return;
@@ -589,7 +587,7 @@ function drawGame() {
     }
   });
 
-  // Render Local Player
+  // Draw Local Player
   const myName = currentUser ? (currentUser.user_metadata?.display_name || currentUser.email.split("@")[0]) : "You";
   drawCharacter(player.x, player.y, myName, activeSprite, facingRight);
 
