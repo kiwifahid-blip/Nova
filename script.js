@@ -1,48 +1,14 @@
 // ==========================================
-// 1. FIREBASE CONFIG & INITIALIZATION
+// 1. SUPABASE CLIENT INITIALIZATION
 // ==========================================
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-import { 
-  getAuth, 
-  setPersistence,
-  browserLocalPersistence,
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  updateProfile,
-  onAuthStateChanged 
-} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { 
-  getDatabase, 
-  ref, 
-  onValue, 
-  runTransaction, 
-  set, 
-  remove, 
-  onDisconnect
-} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
+const SUPABASE_URL = "https://byxzktunhhvxdntddpeo.supabase.co";
+const SUPABASE_KEY = "sb_publishable_zTjxmELF8PntXEw1fqT-RQ__YJZlw1y";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAqM7xsEN6SHt-lrnlF2tHoRLHRbxdWlkI",
-  authDomain: "nova-ca4b5.firebaseapp.com",
-  projectId: "nova-ca4b5",
-  storageBucket: "nova-ca4b5.firebasestorage.app",
-  messagingSenderId: "491973304543",
-  appId: "1:491973304543:web:f63d6ff665b9c8551c896a",
-  measurementId: "G-90TDNQ5VXP",
-  databaseURL: "https://nova-ca4b5-default-rtdb.firebaseio.com"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
-
-setPersistence(auth, browserLocalPersistence).catch((error) => {
-  console.error("Auth persistence error:", error);
-});
+const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 
 // ==========================================
-// 2. AUTHENTICATION LOGIC
+// 2. AUTHENTICATION LOGIC (Supabase Auth)
 // ==========================================
 const authScreen = document.getElementById("auth-screen");
 const authTitle = document.getElementById("auth-title");
@@ -60,7 +26,6 @@ const friendsBox = document.getElementById("friends-box");
 let isSignUp = true; 
 let currentUser = null;
 
-// SET THE ORIGINAL CREATOR OF THE GAME HERE
 const ORIGINAL_GAME_CREATOR = "898"; 
 
 toggleAuthMode.addEventListener("click", () => {
@@ -103,18 +68,36 @@ authBtn.addEventListener("click", async (e) => {
         errorMsg.textContent = "Please enter a username!";
         return;
       }
-      
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await updateProfile(userCredential.user, { displayName: username });
-      
-      // Update local display for current logged-in user
-      usernameDisplay.textContent = username;
+
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: { data: { display_name: username } }
+      });
+
+      if (error) throw error;
+      currentUser = data.user;
+      if (currentUser) {
+        usernameDisplay.textContent = username;
+        authScreen.classList.add("hidden");
+      }
     } else {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+      currentUser = data.user;
+      if (currentUser) {
+        const name = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
+        usernameDisplay.textContent = name;
+        authScreen.classList.add("hidden");
+      }
     }
   } catch (error) {
     console.error("Auth Error:", error);
-    errorMsg.textContent = error.message.replace("Firebase: ", "");
+    errorMsg.textContent = error.message;
   }
 });
 
@@ -132,82 +115,80 @@ function renderFriends(friendsArray = []) {
   });
 }
 
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    currentUser = user;
-    authScreen.classList.add("hidden");
-    
-    // Display the logged-in user's name in the header
-    const currentUsername = user.displayName || user.email.split("@")[0];
-    usernameDisplay.textContent = currentUsername;
+// Auto Session Check
+if (supabaseClient) {
+  supabaseClient.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      currentUser = session.user;
+      authScreen.classList.add("hidden");
+      const currentUsername = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
+      usernameDisplay.textContent = currentUsername;
 
-    // Keep the game creator name fixed to the original creator
-    if (gameCreatorDisplay) {
-      gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+      if (gameCreatorDisplay) {
+        gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+      }
+      renderFriends([]);
+    } else {
+      currentUser = null;
+      authScreen.classList.remove("hidden");
     }
-
-    renderFriends([]); 
-  } else {
-    currentUser = null;
-    authScreen.classList.remove("hidden");
-  }
-});
+  });
+}
 
 
 // ==========================================
-// 3. LIVE STATS & MULTIPLAYER PRESENCE
+// 3. MULTIPLAYER PRESENCE & STATS (Supabase)
 // ==========================================
 const visitCountEl = document.getElementById("visit-count");
 const playingCountEl = document.getElementById("playing-count");
 const dashboardPeopleCountEl = document.getElementById("dashboard-people-count");
 
-const visitsRef = ref(db, "games/test/visits");
-const activePlayersRef = ref(db, "games/test/activePlayers");
-
 let hasVisitedThisSession = false;
 let otherPlayers = {};
 let lastDbUpdate = 0;
 
-onValue(visitsRef, (snapshot) => {
-  const count = snapshot.val() || 0;
-  visitCountEl.textContent = count;
-});
-
-onValue(activePlayersRef, (snapshot) => {
-  const playersData = snapshot.val() || {};
-  otherPlayers = playersData;
-  const activeCount = Object.keys(playersData).length;
-  playingCountEl.textContent = activeCount;
-  dashboardPeopleCountEl.textContent = activeCount;
-});
-
-function incrementVisits() {
-  runTransaction(visitsRef, (currentVisits) => {
-    return (currentVisits || 0) + 1;
-  });
+// Subscribe to Live Player Movement/Positions
+if (supabaseClient) {
+  supabaseClient
+    .channel("public:players")
+    .on("postgres_changes", { event: "*", schema: "public", table: "players" }, (payload) => {
+      if (payload.eventType === "DELETE") {
+        delete otherPlayers[payload.old.id];
+      } else {
+        const playerObj = payload.new;
+        otherPlayers[playerObj.id] = {
+          username: playerObj.username,
+          x: playerObj.x,
+          y: playerObj.y,
+          lastMsg: playerObj.last_msg,
+          msgTimestamp: playerObj.msg_timestamp
+        };
+      }
+      const activeCount = Object.keys(otherPlayers).length;
+      playingCountEl.textContent = activeCount;
+      dashboardPeopleCountEl.textContent = activeCount;
+    })
+    .subscribe();
 }
 
 function enterGamePresence() {
-  if (!currentUser) return;
-  
+  if (!currentUser || !supabaseClient) return;  
   myLastMessage = "";
   myMessageTime = 0;
 
-  const playerPresenceRef = ref(db, `games/test/activePlayers/${currentUser.uid}`);
-
-  set(playerPresenceRef, {
-    username: currentUser.displayName || currentUser.email.split("@")[0],
-    x: player.x,
-    y: player.y,
-    lastMsg: "",
-    msgTimestamp: 0
+  supabaseClient.from("players").upsert({
+    id: currentUser.id,
+    username: currentUser.user_metadata?.display_name || currentUser.email.split("@")[0],
+    x: Math.round(player.x),
+    y: Math.round(player.y),
+    last_msg: "",
+    msg_timestamp: 0,
+    last_seen: new Date().toISOString()
   });
-
-  onDisconnect(playerPresenceRef).remove();
 }
 
-function updateMyPositionInDB(force = false) {
-  if (!currentUser) return;
+async function updateMyPositionInDB(force = false) {
+  if (!currentUser || !supabaseClient) return;
 
   const now = Date.now();
   if (!force && now - lastDbUpdate < 50) return;
@@ -218,25 +199,25 @@ function updateMyPositionInDB(force = false) {
     myMessageTime = 0;
   }
 
-  const myPosRef = ref(db, `games/test/activePlayers/${currentUser.uid}`);
-  set(myPosRef, {
-    username: currentUser.displayName || currentUser.email.split("@")[0],
+  await supabaseClient.from("players").upsert({
+    id: currentUser.id,
+    username: currentUser.user_metadata?.display_name || currentUser.email.split("@")[0],
     x: Math.round(player.x),
     y: Math.round(player.y),
-    lastMsg: myLastMessage,
-    msgTimestamp: myMessageTime
+    last_msg: myLastMessage,
+    msg_timestamp: myMessageTime,
+    last_seen: new Date().toISOString()
   });
 }
 
-function leaveGamePresence() {
-  if (!currentUser) return;
-  const playerPresenceRef = ref(db, `games/test/activePlayers/${currentUser.uid}`);
-  remove(playerPresenceRef);
+async function leaveGamePresence() {
+  if (!currentUser || !supabaseClient) return;
+  await supabaseClient.from("players").delete().eq("id", currentUser.id);
 }
 
 
 // ==========================================
-// 4. IN-GAME MULTIPLAYER CHAT LOGIC
+// 4. IN-GAME MULTIPLAYER CHAT LOGIC (SUPABASE)
 // ==========================================
 const chatMessagesList = document.getElementById("chat-messages");
 const chatForm = document.getElementById("chat-form");
@@ -244,59 +225,76 @@ const chatInput = document.getElementById("chat-input");
 
 let myLastMessage = "";
 let myMessageTime = 0;
-
 const IGNORED_KEYS = ["w", "a", "s", "d", "W", "A", "S", "D"];
-const currentChatRef = ref(db, "games/test/currentChat");
 
-onValue(currentChatRef, (snapshot) => {
-  const msg = snapshot.val();
-  chatMessagesList.innerHTML = "";
-
-  if (!msg || !msg.text) return;
-
-  // Ignore messages older than 5 seconds
-  if (Date.now() - msg.timestamp > 5000) return;
-
-  if (IGNORED_KEYS.includes(msg.text.trim())) return;
+function appendChatMessage(username, text) {
+  if (!text || IGNORED_KEYS.includes(text.trim())) return;
 
   const item = document.createElement("div");
   item.className = "chat-message-item";
-  item.innerHTML = `<span class="chat-author">${msg.username}:</span> ${msg.text}`;
+  item.innerHTML = `<span class="chat-author">${username}:</span> ${text}`;
   chatMessagesList.appendChild(item);
-  
   chatMessagesList.scrollTop = chatMessagesList.scrollHeight;
-});
+}
 
-chatForm.addEventListener("submit", (e) => {
+async function loadChatHistory() {
+  if (!supabaseClient) return;
+
+  const { data, error } = await supabaseClient
+    .from("messages")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(15);
+
+  if (error) {
+    console.error("Error loading chat history:", error);
+    return;
+  }
+
+  chatMessagesList.innerHTML = "";
+  if (data) {
+    data.reverse().forEach(msg => appendChatMessage(msg.username, msg.text));
+  }
+}
+
+if (supabaseClient) {
+  loadChatHistory();
+
+  supabaseClient
+    .channel("public:messages")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+      const newMsg = payload.new;
+      appendChatMessage(newMsg.username, newMsg.text);
+    })
+    .subscribe();
+}
+
+chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = chatInput.value.trim();
-  
+
   if (!text || !currentUser || IGNORED_KEYS.includes(text)) {
     chatInput.value = "";
     chatInput.blur();
     return;
   }
 
-  const username = currentUser.displayName || currentUser.email.split("@")[0];
-
-  // Send message to Firebase
-  set(currentChatRef, {
-    username: username,
-    text: text,
-    timestamp: Date.now()
-  });
+  const username = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
 
   myLastMessage = text;
   myMessageTime = Date.now();
   updateMyPositionInDB(true);
 
-  chatInput.value = "";
-  chatInput.blur(); 
+  if (supabaseClient) {
+    const { error } = await supabaseClient
+      .from("messages")
+      .insert([{ username: username, text: text }]);
 
-  // Clear message from database after 4 seconds
-  setTimeout(() => {
-    set(currentChatRef, null);
-  }, 4000);
+    if (error) console.error("Error sending message to Supabase:", error);
+  }
+
+  chatInput.value = "";
+  chatInput.blur();
 });
 
 
@@ -311,11 +309,6 @@ const backBtn = document.getElementById("back-btn");
 openGameBtn.addEventListener("click", () => {
   dashboardView.classList.add("hidden");
   gamePageView.classList.remove("hidden");
-  
-  if (!hasVisitedThisSession) {
-    incrementVisits();
-    hasVisitedThisSession = true; 
-  }
 });
 
 backBtn.addEventListener("click", () => {
@@ -338,20 +331,23 @@ const pauseMenu = document.getElementById("pause-menu");
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
 
-// Preload Character Sprites
+// Character Sprites
 const idle1Sprite = new Image();
-idle1Sprite.src = "Idle1.png";
+idle1Sprite.crossOrigin = "anonymous";
+idle1Sprite.src = "https://i.imgur.com/GynwpQb.png";
 
 const idle2Sprite = new Image();
-idle2Sprite.src = "Idle2.png";
+idle2Sprite.crossOrigin = "anonymous";
+idle2Sprite.src = "https://i.imgur.com/2tmFG15.png";
 
 const walk1Sprite = new Image();
-walk1Sprite.src = "Walk1.png";
+walk1Sprite.crossOrigin = "anonymous";
+walk1Sprite.src = "https://i.imgur.com/HdoZEFA.png";
 
 const walk2Sprite = new Image();
-walk2Sprite.src = "Walk2.png";
+walk2Sprite.crossOrigin = "anonymous";
+walk2Sprite.src = "https://i.imgur.com/0K6RSYe.png";
 
-// Animation State Trackers
 let animTimer = 0;
 let walkFrame = 1;
 let idleFrame = 1;
@@ -581,9 +577,9 @@ function drawGame() {
 
   // Render Other Connected Players
   const now = Date.now();
-  Object.keys(otherPlayers).forEach(uid => {
-    if (currentUser && uid === currentUser.uid) return;
-    const p = otherPlayers[uid];
+  Object.keys(otherPlayers).forEach(id => {
+    if (currentUser && id === currentUser.id) return;
+    const p = otherPlayers[id];
     drawCharacter(p.x, p.y, p.username, activeSprite, true);
 
     if (p.lastMsg && !IGNORED_KEYS.includes(p.lastMsg) && now - p.msgTimestamp < 4000) {
@@ -592,7 +588,7 @@ function drawGame() {
   });
 
   // Render Local Player
-  const myName = currentUser ? (currentUser.displayName || currentUser.email.split("@")[0]) : "You";
+  const myName = currentUser ? (currentUser.user_metadata?.display_name || currentUser.email.split("@")[0]) : "You";
   drawCharacter(player.x, player.y, myName, activeSprite, facingRight);
 
   if (myLastMessage && !IGNORED_KEYS.includes(myLastMessage) && now - myMessageTime < 4000) {
