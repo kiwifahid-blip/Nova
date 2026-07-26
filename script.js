@@ -143,11 +143,9 @@ const visitCountEl = document.getElementById("visit-count");
 const playingCountEl = document.getElementById("playing-count");
 const dashboardPeopleCountEl = document.getElementById("dashboard-people-count");
 
-let hasVisitedThisSession = false;
 let otherPlayers = {};
 let lastDbUpdate = 0;
 
-// Subscribe to Live Player Movement/Positions
 if (supabaseClient) {
   supabaseClient
     .channel("public:players")
@@ -165,8 +163,8 @@ if (supabaseClient) {
         };
       }
       const activeCount = Object.keys(otherPlayers).length;
-      playingCountEl.textContent = activeCount;
-      dashboardPeopleCountEl.textContent = activeCount;
+      if (playingCountEl) playingCountEl.textContent = activeCount;
+      if (dashboardPeopleCountEl) dashboardPeopleCountEl.textContent = activeCount;
     })
     .subscribe();
 }
@@ -331,7 +329,7 @@ const pauseMenu = document.getElementById("pause-menu");
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
 
-// Character Sprites
+// Load Sprites
 const idle1Sprite = new Image();
 idle1Sprite.crossOrigin = "anonymous";
 idle1Sprite.src = "https://i.imgur.com/GynwpQb.png";
@@ -393,6 +391,7 @@ window.addEventListener("resize", () => {
   if (isGamePlaying) resizeCanvas();
 });
 
+// Safe Keydown Handler
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && isGamePlaying) {
     if (document.activeElement === chatInput) {
@@ -412,18 +411,21 @@ window.addEventListener("keydown", (e) => {
 
   if (document.activeElement === chatInput) return;
 
-  if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.key.toLowerCase())) {
-    keys[e.key] = true;
-    keys[e.key.toLowerCase()] = true;
+  if (e.key) {
+    const keyLower = e.key.toLowerCase();
+    if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+    if (keys.hasOwnProperty(keyLower)) keys[keyLower] = true;
   }
 });
 
+// Safe Keyup Handler
 window.addEventListener("keyup", (e) => {
   if (document.activeElement === chatInput) return;
 
-  if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.key.toLowerCase())) {
-    keys[e.key] = false;
-    keys[e.key.toLowerCase()] = false;
+  if (e.key) {
+    const keyLower = e.key.toLowerCase();
+    if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+    if (keys.hasOwnProperty(keyLower)) keys[keyLower] = false;
   }
 });
 
@@ -558,7 +560,7 @@ function drawGame() {
   ctx.fillStyle = "#2e8b57";
   ctx.fillRect(0, canvas.height - groundHeight, canvas.width, 20);
 
-  // Sprite Animation Frame Selection
+  // Sprite Animation Selection
   animTimer++;
   const isMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
   let activeSprite;
