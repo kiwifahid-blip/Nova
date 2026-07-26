@@ -439,36 +439,42 @@ function togglePauseMenu() {
   }
 }
 
-resumeBtn.addEventListener("click", () => {
-  isPaused = false;
-  resetKeys();
-  pauseMenu.classList.add("hidden");
-});
+if (resumeBtn) {
+  resumeBtn.addEventListener("click", () => {
+    isPaused = false;
+    resetKeys();
+    pauseMenu.classList.add("hidden");
+  });
+}
 
-startPlayBtn.addEventListener("click", () => {
-  gameDetailsContainer.classList.add("hidden");
-  gameCanvasContainer.classList.remove("hidden");
-  resizeCanvas();
-  isGamePlaying = true;
-  isPaused = false;
+if (startPlayBtn) {
+  startPlayBtn.addEventListener("click", () => {
+    gameDetailsContainer.classList.add("hidden");
+    gameCanvasContainer.classList.remove("hidden");
+    resizeCanvas();
+    isGamePlaying = true;
+    isPaused = false;
 
-  myLastMessage = "";
-  myMessageTime = 0;
-  chatInput.value = "";
-  chatInput.blur();
-  resetKeys();
+    myLastMessage = "";
+    myMessageTime = 0;
+    chatInput.value = "";
+    chatInput.blur();
+    resetKeys();
 
-  pauseMenu.classList.add("hidden");
-  enterGamePresence();
-  resetPlayer();
-  gameLoop();
-});
+    pauseMenu.classList.add("hidden");
+    enterGamePresence();
+    resetPlayer();
+    gameLoop();
+  });
+}
 
-exitGameBtn.addEventListener("click", () => {
-  stopGame();
-  gameCanvasContainer.classList.add("hidden");
-  gameDetailsContainer.classList.remove("hidden");
-});
+if (exitGameBtn) {
+  exitGameBtn.addEventListener("click", () => {
+    stopGame();
+    gameCanvasContainer.classList.add("hidden");
+    gameDetailsContainer.classList.remove("hidden");
+  });
+}
 
 function stopGame() {
   leaveGamePresence();
