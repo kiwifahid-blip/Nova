@@ -2,13 +2,13 @@
 // 1. SUPABASE CLIENT INITIALIZATION
 // ==========================================
 const SUPABASE_URL = "https://byxzktunhhvxdntddpeo.supabase.co";
-const SUPABASE_KEY = "sb_publishable_zTjxmELF8PntXEw1fqT-RQ__YJZlw1y";
+const SUPABASE_KEY = "sb_publishable_zTjxmELF8PntXEw1fqT-RQ__YJZlw1y"; // Make sure to replace with your public anon key starting with eyJ...
 
 const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 
 // ==========================================
-// 2. AUTHENTICATION & FRIENDS LOGIC
+// 2. AUTHENTICATION LOGIC & PROFILE MANAGEMENT
 // ==========================================
 const authScreen = document.getElementById("auth-screen");
 const authTitle = document.getElementById("auth-title");
@@ -20,16 +20,15 @@ const passwordInput = document.getElementById("auth-password");
 const errorMsg = document.getElementById("auth-error");
 
 const usernameDisplay = document.getElementById("username");
+const playerIdDisplay = document.getElementById("player-id-display");
 const gameCreatorDisplay = document.getElementById("game-creator");
 const friendsBox = document.getElementById("friends-box");
 
-const searchPersonInput = document.getElementById("search-person-input");
-const searchPersonBtn = document.getElementById("search-person-btn");
-const searchResultsDropdown = document.getElementById("search-results-dropdown");
-
-let isSignUp = true;
+let isSignUp = true; 
 let currentUser = null;
-const ORIGINAL_GAME_CREATOR = "898";
+let currentNumericId = null;
+
+const ORIGINAL_GAME_CREATOR = "898"; 
 
 toggleAuthMode.addEventListener("click", () => {
   isSignUp = !isSignUp;
@@ -46,6 +45,29 @@ toggleAuthMode.addEventListener("click", () => {
   }
   errorMsg.textContent = "";
 });
+
+async function syncUserProfile(user) {
+  if (!user || !supabaseClient) return;
+
+  const displayName = user.user_metadata?.display_name || user.email.split("@")[0];
+
+  const { data, error } = await supabaseClient
+    .from("players")
+    .upsert({
+      id: user.id,
+      username: displayName,
+      last_seen: new Date().toISOString()
+    }, { onConflict: 'id' })
+    .select("player_id, username")
+    .single();
+
+  if (!error && data) {
+    currentNumericId = data.player_id;
+    if (playerIdDisplay) {
+      playerIdDisplay.textContent = currentNumericId;
+    }
+  }
+}
 
 authBtn.addEventListener("click", async (e) => {
   e.preventDefault();
@@ -83,6 +105,7 @@ authBtn.addEventListener("click", async (e) => {
       if (currentUser) {
         usernameDisplay.textContent = username;
         if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+        await syncUserProfile(currentUser);
         authScreen.classList.add("hidden");
       }
     } else {
@@ -97,6 +120,7 @@ authBtn.addEventListener("click", async (e) => {
         const name = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
         usernameDisplay.textContent = name;
         if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+        await syncUserProfile(currentUser);
         authScreen.classList.add("hidden");
       }
     }
@@ -110,49 +134,37 @@ function renderFriends(friendsArray = []) {
   if (!friendsBox) return;
   friendsBox.innerHTML = "";
   if (friendsArray.length === 0) {
-    friendsBox.innerHTML = `<span style="color: #888; font-size: 14px;">No friends added yet</span>`;
+    friendsBox.innerHTML = `<span style="color: #666; font-style: italic;">No friends added yet</span>`;
     return;
   }
   friendsArray.forEach(friend => {
-    const item = document.createElement("div");
-    item.className = "friend-item";
-    item.innerHTML = `<div class="friend-icon"></div><span>${friend.username}</span>`;
-    friendsBox.appendChild(item);
+    const friendItem = document.createElement("div");
+    friendItem.className = "friend-item";
+    friendItem.innerHTML = `<div class="friend-icon"></div><span>${friend.name} (#${friend.id})</span>`;
+    friendsBox.appendChild(friendItem);
   });
 }
 
-// Auto Session Check on Load
+// Auto Session Check
 if (supabaseClient) {
-  supabaseClient.auth.getSession().then(({ data: { session } }) => {
+  supabaseClient.auth.getSession().then(async ({ data: { session } }) => {
     if (session) {
       currentUser = session.user;
-      if (authScreen) authScreen.classList.add("hidden");
+      authScreen.classList.add("hidden");
       const currentUsername = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
-      if (usernameDisplay) usernameDisplay.textContent = currentUsername;
-      if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+      usernameDisplay.textContent = currentUsername;
+
+      if (gameCreatorDisplay) {
+        gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+      }
+      await syncUserProfile(currentUser);
       renderFriends([]);
     } else {
       currentUser = null;
-      if (authScreen) authScreen.classList.remove("hidden");
+      authScreen.classList.remove("hidden");
     }
   });
 }
-
-// Search users dropdown listener
-if (searchPersonBtn) {
-  searchPersonBtn.addEventListener("click", () => {
-    const query = searchPersonInput.value.trim().toLowerCase();
-    if (!query) return;
-    searchResultsDropdown.innerHTML = `<div class="search-result-item"><span>Search active</span></div>`;
-    searchResultsDropdown.classList.remove("hidden");
-  });
-}
-
-document.addEventListener("click", (e) => {
-  if (searchResultsDropdown && !e.target.closest(".friend-search-container")) {
-    searchResultsDropdown.classList.add("hidden");
-  }
-});
 
 
 // ==========================================
@@ -175,6 +187,7 @@ if (supabaseClient) {
         const playerObj = payload.new;
         otherPlayers[playerObj.id] = {
           username: playerObj.username,
+          numericId: playerObj.player_id,
           x: playerObj.x,
           y: playerObj.y,
           lastMsg: playerObj.last_msg,
@@ -189,13 +202,14 @@ if (supabaseClient) {
 }
 
 function enterGamePresence() {
-  if (!currentUser || !supabaseClient) return;
+  if (!currentUser || !supabaseClient) return;  
   myLastMessage = "";
   myMessageTime = 0;
 
   supabaseClient.from("players").upsert({
     id: currentUser.id,
     username: currentUser.user_metadata?.display_name || currentUser.email.split("@")[0],
+    player_id: currentNumericId,
     x: Math.round(player.x),
     y: Math.round(player.y),
     last_msg: "",
@@ -219,6 +233,7 @@ async function updateMyPositionInDB(force = false) {
   await supabaseClient.from("players").upsert({
     id: currentUser.id,
     username: currentUser.user_metadata?.display_name || currentUser.email.split("@")[0],
+    player_id: currentNumericId,
     x: Math.round(player.x),
     y: Math.round(player.y),
     last_msg: myLastMessage,
@@ -268,7 +283,7 @@ async function loadChatHistory() {
     return;
   }
 
-  if (chatMessagesList) chatMessagesList.innerHTML = "";
+  chatMessagesList.innerHTML = "";
   if (data) {
     data.reverse().forEach(msg => appendChatMessage(msg.username, msg.text));
   }
@@ -334,6 +349,7 @@ if (openGameBtn) {
 
 if (backBtn) {
   backBtn.addEventListener("click", () => {
+    stopGame();
     if (gamePageView) gamePageView.classList.add("hidden");
     if (dashboardView) dashboardView.classList.remove("hidden");
   });
@@ -353,7 +369,7 @@ const pauseMenu = document.getElementById("pause-menu");
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas ? canvas.getContext("2d") : null;
 
-// Sprite Animations
+// Character Sprites
 const idle1Sprite = new Image();
 idle1Sprite.crossOrigin = "anonymous";
 idle1Sprite.src = "https://i.imgur.com/GynwpQb.png";
@@ -571,7 +587,7 @@ function updateGame() {
 function drawGame() {
   if (!ctx || !canvas) return;
 
-  // Sky & Background
+  // Background
   ctx.fillStyle = "#70c5ce";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -607,7 +623,7 @@ function drawGame() {
   Object.keys(otherPlayers).forEach(id => {
     if (currentUser && id === currentUser.id) return;
     const p = otherPlayers[id];
-    drawCharacter(p.x, p.y, p.username, activeSprite, true);
+    drawCharacter(p.x, p.y, p.username, activeSprite, true, p.numericId);
 
     if (p.lastMsg && !IGNORED_KEYS.includes(p.lastMsg) && now - p.msgTimestamp < 4000) {
       drawSpeechBubble(p.x + 30, p.y - 10, p.lastMsg);
@@ -616,19 +632,22 @@ function drawGame() {
 
   // Draw Current Player
   const myName = currentUser ? (currentUser.user_metadata?.display_name || currentUser.email.split("@")[0]) : "You";
-  drawCharacter(player.x, player.y, myName, activeSprite, facingRight);
+  drawCharacter(player.x, player.y, myName, activeSprite, facingRight, currentNumericId);
 
   if (myLastMessage && !IGNORED_KEYS.includes(myLastMessage) && now - myMessageTime < 4000) {
     drawSpeechBubble(player.x + 30, player.y - 10, myLastMessage);
   }
 }
 
-function drawCharacter(px, py, username, spriteImg, isFacingRight = true) {
+function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numericId = null) {
   if (!ctx) return;
+  
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 14px monospace";
   ctx.textAlign = "center";
-  ctx.fillText(username, px + 30, py - 10);
+  
+  const label = numericId ? `${username} (#${numericId})` : username;
+  ctx.fillText(label, px + 30, py - 10);
 
   ctx.save();
 
