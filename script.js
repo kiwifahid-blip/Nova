@@ -8,7 +8,7 @@ const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_U
 
 
 // ==========================================
-// 2. AUTHENTICATION LOGIC (Supabase Auth)
+// 2. AUTHENTICATION & FRIENDS LOGIC
 // ==========================================
 const authScreen = document.getElementById("auth-screen");
 const authTitle = document.getElementById("auth-title");
@@ -23,10 +23,13 @@ const usernameDisplay = document.getElementById("username");
 const gameCreatorDisplay = document.getElementById("game-creator");
 const friendsBox = document.getElementById("friends-box");
 
-let isSignUp = true; 
-let currentUser = null;
+const searchPersonInput = document.getElementById("search-person-input");
+const searchPersonBtn = document.getElementById("search-person-btn");
+const searchResultsDropdown = document.getElementById("search-results-dropdown");
 
-const ORIGINAL_GAME_CREATOR = "898"; 
+let isSignUp = true;
+let currentUser = null;
+const ORIGINAL_GAME_CREATOR = "898";
 
 toggleAuthMode.addEventListener("click", () => {
   isSignUp = !isSignUp;
@@ -79,6 +82,7 @@ authBtn.addEventListener("click", async (e) => {
       currentUser = data.user;
       if (currentUser) {
         usernameDisplay.textContent = username;
+        if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
         authScreen.classList.add("hidden");
       }
     } else {
@@ -92,6 +96,7 @@ authBtn.addEventListener("click", async (e) => {
       if (currentUser) {
         const name = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
         usernameDisplay.textContent = name;
+        if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
         authScreen.classList.add("hidden");
       }
     }
@@ -102,42 +107,56 @@ authBtn.addEventListener("click", async (e) => {
 });
 
 function renderFriends(friendsArray = []) {
+  if (!friendsBox) return;
   friendsBox.innerHTML = "";
   if (friendsArray.length === 0) {
-    friendsBox.innerHTML = `<span style="color: #666; font-style: italic;">No friends added yet</span>`;
+    friendsBox.innerHTML = `<span style="color: #888; font-size: 14px;">No friends added yet</span>`;
     return;
   }
   friendsArray.forEach(friend => {
-    const friendItem = document.createElement("div");
-    friendItem.className = "friend-item";
-    friendItem.innerHTML = `<div class="friend-icon"></div><span>${friend.name}</span>`;
-    friendsBox.appendChild(friendItem);
+    const item = document.createElement("div");
+    item.className = "friend-item";
+    item.innerHTML = `<div class="friend-icon"></div><span>${friend.username}</span>`;
+    friendsBox.appendChild(item);
   });
 }
 
-// Auto Session Check on Startup
+// Auto Session Check on Load
 if (supabaseClient) {
   supabaseClient.auth.getSession().then(({ data: { session } }) => {
     if (session) {
       currentUser = session.user;
-      authScreen.classList.add("hidden");
+      if (authScreen) authScreen.classList.add("hidden");
       const currentUsername = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
-      usernameDisplay.textContent = currentUsername;
-
-      if (gameCreatorDisplay) {
-        gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
-      }
+      if (usernameDisplay) usernameDisplay.textContent = currentUsername;
+      if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
       renderFriends([]);
     } else {
       currentUser = null;
-      authScreen.classList.remove("hidden");
+      if (authScreen) authScreen.classList.remove("hidden");
     }
   });
 }
 
+// Search users dropdown listener
+if (searchPersonBtn) {
+  searchPersonBtn.addEventListener("click", () => {
+    const query = searchPersonInput.value.trim().toLowerCase();
+    if (!query) return;
+    searchResultsDropdown.innerHTML = `<div class="search-result-item"><span>Search active</span></div>`;
+    searchResultsDropdown.classList.remove("hidden");
+  });
+}
+
+document.addEventListener("click", (e) => {
+  if (searchResultsDropdown && !e.target.closest(".friend-search-container")) {
+    searchResultsDropdown.classList.add("hidden");
+  }
+});
+
 
 // ==========================================
-// 3. MULTIPLAYER PRESENCE & STATS (Supabase)
+// 3. MULTIPLAYER PRESENCE & STATS
 // ==========================================
 const visitCountEl = document.getElementById("visit-count");
 const playingCountEl = document.getElementById("playing-count");
@@ -170,7 +189,7 @@ if (supabaseClient) {
 }
 
 function enterGamePresence() {
-  if (!currentUser || !supabaseClient) return;  
+  if (!currentUser || !supabaseClient) return;
   myLastMessage = "";
   myMessageTime = 0;
 
@@ -215,7 +234,7 @@ async function leaveGamePresence() {
 
 
 // ==========================================
-// 4. IN-GAME MULTIPLAYER CHAT LOGIC (SUPABASE)
+// 4. IN-GAME MULTIPLAYER CHAT LOGIC
 // ==========================================
 const chatMessagesList = document.getElementById("chat-messages");
 const chatForm = document.getElementById("chat-form");
@@ -249,7 +268,7 @@ async function loadChatHistory() {
     return;
   }
 
-  chatMessagesList.innerHTML = "";
+  if (chatMessagesList) chatMessagesList.innerHTML = "";
   if (data) {
     data.reverse().forEach(msg => appendChatMessage(msg.username, msg.text));
   }
@@ -267,33 +286,35 @@ if (supabaseClient) {
     .subscribe();
 }
 
-chatForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const text = chatInput.value.trim();
+if (chatForm) {
+  chatForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = chatInput.value.trim();
 
-  if (!text || !currentUser || IGNORED_KEYS.includes(text)) {
+    if (!text || !currentUser || IGNORED_KEYS.includes(text)) {
+      chatInput.value = "";
+      chatInput.blur();
+      return;
+    }
+
+    const username = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
+
+    myLastMessage = text;
+    myMessageTime = Date.now();
+    updateMyPositionInDB(true);
+
+    if (supabaseClient) {
+      const { error } = await supabaseClient
+        .from("messages")
+        .insert([{ username: username, text: text }]);
+
+      if (error) console.error("Error sending message to Supabase:", error);
+    }
+
     chatInput.value = "";
     chatInput.blur();
-    return;
-  }
-
-  const username = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
-
-  myLastMessage = text;
-  myMessageTime = Date.now();
-  updateMyPositionInDB(true);
-
-  if (supabaseClient) {
-    const { error } = await supabaseClient
-      .from("messages")
-      .insert([{ username: username, text: text }]);
-
-    if (error) console.error("Error sending message to Supabase:", error);
-  }
-
-  chatInput.value = "";
-  chatInput.blur();
-});
+  });
+}
 
 
 // ==========================================
@@ -304,16 +325,19 @@ const gamePageView = document.getElementById("game-page-view");
 const openGameBtn = document.getElementById("open-game-btn");
 const backBtn = document.getElementById("back-btn");
 
-openGameBtn.addEventListener("click", () => {
-  dashboardView.classList.add("hidden");
-  gamePageView.classList.remove("hidden");
-});
+if (openGameBtn) {
+  openGameBtn.addEventListener("click", () => {
+    if (dashboardView) dashboardView.classList.add("hidden");
+    if (gamePageView) gamePageView.classList.remove("hidden");
+  });
+}
 
-backBtn.addEventListener("click", () => {
-  stopGame();
-  gamePageView.classList.add("hidden");
-  dashboardView.classList.remove("hidden");
-});
+if (backBtn) {
+  backBtn.addEventListener("click", () => {
+    if (gamePageView) gamePageView.classList.add("hidden");
+    if (dashboardView) dashboardView.classList.remove("hidden");
+  });
+}
 
 
 // ==========================================
@@ -327,9 +351,9 @@ const resumeBtn = document.getElementById("resume-btn");
 const pauseMenu = document.getElementById("pause-menu");
 
 const canvas = document.getElementById("game-canvas");
-const ctx = canvas.getContext("2d");
+const ctx = canvas ? canvas.getContext("2d") : null;
 
-// Character Sprites (Idle & Walk Animations)
+// Sprite Animations
 const idle1Sprite = new Image();
 idle1Sprite.crossOrigin = "anonymous";
 idle1Sprite.src = "https://i.imgur.com/GynwpQb.png";
@@ -383,16 +407,19 @@ function resetKeys() {
 }
 
 function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  if (canvas) {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
 }
 
 window.addEventListener("resize", () => {
   if (isGamePlaying) resizeCanvas();
 });
 
-// Crash-proof Keydown Listener
 window.addEventListener("keydown", (e) => {
+  if (!e || !e.key) return;
+
   if (e.key === "Escape" && isGamePlaying) {
     if (document.activeElement === chatInput) {
       chatInput.blur();
@@ -411,57 +438,51 @@ window.addEventListener("keydown", (e) => {
 
   if (document.activeElement === chatInput) return;
 
-  if (e.key) {
-    const keyLower = e.key.toLowerCase();
-    if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
-    if (keys.hasOwnProperty(keyLower)) keys[keyLower] = true;
-  }
+  const keyLower = e.key.toLowerCase();
+  if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+  if (keys.hasOwnProperty(keyLower)) keys[keyLower] = true;
 });
 
-// Crash-proof Keyup Listener
 window.addEventListener("keyup", (e) => {
+  if (!e || !e.key) return;
   if (document.activeElement === chatInput) return;
 
-  if (e.key) {
-    const keyLower = e.key.toLowerCase();
-    if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
-    if (keys.hasOwnProperty(keyLower)) keys[keyLower] = false;
-  }
+  const keyLower = e.key.toLowerCase();
+  if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+  if (keys.hasOwnProperty(keyLower)) keys[keyLower] = false;
 });
 
 function togglePauseMenu() {
   isPaused = !isPaused;
   resetKeys();
-  if (isPaused) {
-    pauseMenu.classList.remove("hidden");
-  } else {
-    pauseMenu.classList.add("hidden");
-  }
+  if (pauseMenu) pauseMenu.classList.toggle("hidden", !isPaused);
 }
 
 if (resumeBtn) {
   resumeBtn.addEventListener("click", () => {
     isPaused = false;
     resetKeys();
-    pauseMenu.classList.add("hidden");
+    if (pauseMenu) pauseMenu.classList.add("hidden");
   });
 }
 
 if (startPlayBtn) {
   startPlayBtn.addEventListener("click", () => {
-    gameDetailsContainer.classList.add("hidden");
-    gameCanvasContainer.classList.remove("hidden");
+    if (gameDetailsContainer) gameDetailsContainer.classList.add("hidden");
+    if (gameCanvasContainer) gameCanvasContainer.classList.remove("hidden");
     resizeCanvas();
     isGamePlaying = true;
     isPaused = false;
 
     myLastMessage = "";
     myMessageTime = 0;
-    chatInput.value = "";
-    chatInput.blur();
+    if (chatInput) {
+      chatInput.value = "";
+      chatInput.blur();
+    }
     resetKeys();
 
-    pauseMenu.classList.add("hidden");
+    if (pauseMenu) pauseMenu.classList.add("hidden");
     enterGamePresence();
     resetPlayer();
     gameLoop();
@@ -471,8 +492,8 @@ if (startPlayBtn) {
 if (exitGameBtn) {
   exitGameBtn.addEventListener("click", () => {
     stopGame();
-    gameCanvasContainer.classList.add("hidden");
-    gameDetailsContainer.classList.remove("hidden");
+    if (gameCanvasContainer) gameCanvasContainer.classList.add("hidden");
+    if (gameDetailsContainer) gameDetailsContainer.classList.remove("hidden");
   });
 }
 
@@ -491,7 +512,7 @@ function stopGame() {
 
 function resetPlayer() {
   player.x = 200;
-  player.y = canvas.height - 190;
+  player.y = canvas ? canvas.height - 190 : 300;
   player.velocityX = 0;
   player.velocityY = 0;
 }
@@ -533,9 +554,9 @@ function updateGame() {
   player.y += player.velocityY;
 
   if (player.x < 0) player.x = 0;
-  if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+  if (canvas && player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
-  const groundY = canvas.height - 120;
+  const groundY = canvas ? canvas.height - 120 : 500;
   if (player.y + player.height >= groundY) {
     player.y = groundY - player.height;
     player.velocityY = 0;
@@ -548,15 +569,19 @@ function updateGame() {
 }
 
 function drawGame() {
-  // Background & Environment
+  if (!ctx || !canvas) return;
+
+  // Sky & Background
   ctx.fillStyle = "#70c5ce";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // Clouds
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(150, 80, 120, 40);
   ctx.fillRect(canvas.width * 0.5, 120, 160, 55);
   ctx.fillRect(canvas.width * 0.8, 60, 110, 35);
 
+  // Ground
   const groundHeight = 120;
   ctx.fillStyle = "#8b5a2b";
   ctx.fillRect(0, canvas.height - groundHeight, canvas.width, groundHeight);
@@ -564,24 +589,20 @@ function drawGame() {
   ctx.fillStyle = "#2e8b57";
   ctx.fillRect(0, canvas.height - groundHeight, canvas.width, 20);
 
-  // Animation Frame Switching
+  // Animation Toggle
   animTimer++;
   const isMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
   let activeSprite;
 
   if (isMoving) {
-    if (animTimer % 8 === 0) {
-      walkFrame = (walkFrame === 1) ? 2 : 1;
-    }
+    if (animTimer % 8 === 0) walkFrame = (walkFrame === 1) ? 2 : 1;
     activeSprite = (walkFrame === 1) ? walk1Sprite : walk2Sprite;
   } else {
-    if (animTimer % 30 === 0) {
-      idleFrame = (idleFrame === 1) ? 2 : 1;
-    }
+    if (animTimer % 30 === 0) idleFrame = (idleFrame === 1) ? 2 : 1;
     activeSprite = (idleFrame === 1) ? idle1Sprite : idle2Sprite;
   }
 
-  // Draw Connected Multiplayer Players
+  // Draw Other Online Players
   const now = Date.now();
   Object.keys(otherPlayers).forEach(id => {
     if (currentUser && id === currentUser.id) return;
@@ -593,7 +614,7 @@ function drawGame() {
     }
   });
 
-  // Draw Local Player
+  // Draw Current Player
   const myName = currentUser ? (currentUser.user_metadata?.display_name || currentUser.email.split("@")[0]) : "You";
   drawCharacter(player.x, player.y, myName, activeSprite, facingRight);
 
@@ -603,6 +624,7 @@ function drawGame() {
 }
 
 function drawCharacter(px, py, username, spriteImg, isFacingRight = true) {
+  if (!ctx) return;
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 14px monospace";
   ctx.textAlign = "center";
@@ -626,6 +648,7 @@ function drawCharacter(px, py, username, spriteImg, isFacingRight = true) {
 }
 
 function drawSpeechBubble(centerX, topY, text) {
+  if (!ctx) return;
   ctx.font = "12px monospace";
   const textWidth = ctx.measureText(text).width;
   const padding = 8;
