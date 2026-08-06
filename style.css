@@ -1,6 +1,4 @@
-/* ==========================================
-   1. GLOBAL & CORE LAYOUT
-   ========================================== */
+/* GLOBAL LAYOUT */
 body {
   background-color: #111;
   color: #fff;
@@ -13,9 +11,7 @@ body {
   display: none !important;
 }
 
-/* ==========================================
-   2. AUTHENTICATION OVERLAY
-   ========================================== */
+/* AUTHENTICATION OVERLAY */
 .auth-overlay {
   position: fixed;
   top: 0;
@@ -95,14 +91,13 @@ body {
   margin: 0;
 }
 
-/* ==========================================
-   3. TOP HEADER & FRIENDS BAR
-   ========================================== */
+/* TOP HEADER & FRIENDS BAR */
 .top-bar {
   display: flex;
   align-items: center;
   gap: 30px;
   margin-bottom: 40px;
+  flex-wrap: wrap;
 }
 
 .profile-section {
@@ -131,28 +126,91 @@ body {
   padding: 10px 20px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  width: 600px;
-  height: 40px;
+  gap: 15px;
+  min-width: 400px;
+  max-width: 600px;
+  min-height: 40px;
+  overflow-x: auto;
 }
 
 .friend-item {
   display: flex;
   align-items: center;
   gap: 8px;
+  background-color: #222;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid #444;
+  white-space: nowrap;
 }
 
 .friend-icon {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid #00ffcc;
   background-color: #555;
 }
 
-/* ==========================================
-   4. PLAYED SECTION
-   ========================================== */
+/* SEARCH FRIENDS SECTION */
+.friend-search-container {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: relative;
+}
+
+.friend-search-bar {
+  display: flex;
+  gap: 8px;
+}
+
+.friend-search-bar input {
+  background-color: #000;
+  border: 2px solid #00ffcc;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  outline: none;
+  font-size: 14px;
+}
+
+.friend-search-bar button {
+  background-color: #00ffcc;
+  color: #000;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.friend-search-bar button:hover {
+  background-color: #00cc88;
+}
+
+.search-results-dropdown {
+  position: absolute;
+  top: 45px;
+  left: 0;
+  width: 100%;
+  background-color: #000;
+  border: 2px solid #00ffcc;
+  border-radius: 8px;
+  z-index: 100;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.search-result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #222;
+}
+
+/* PLAYED SECTION */
 .played-section h2 {
   font-size: 32px;
   margin-bottom: 15px;
@@ -210,9 +268,7 @@ body {
   margin-top: 5px;
 }
 
-/* ==========================================
-   5. GAME DETAILS & FULLSCREEN CANVAS
-   ========================================== */
+/* GAME DETAILS & CANVAS */
 .back-btn {
   background: none;
   border: 2px solid #fff;
@@ -304,7 +360,7 @@ body {
   background-color: #00c853;
 }
 
-/* FULLSCREEN GAME OVERLAY */
+/* FULLSCREEN OVERLAY */
 .fullscreen-game-overlay {
   position: fixed;
   top: 0;
@@ -327,7 +383,6 @@ body {
   image-rendering: pixelated;
 }
 
-/* ESC / PAUSE MENU OVERLAY */
 .pause-menu-overlay {
   position: absolute;
   top: 0;
@@ -407,9 +462,7 @@ body {
   background-color: #cc0044;
 }
 
-/* ==========================================
-   6. TRANSPARENT IN-GAME CHAT UI
-   ========================================== */
+/* CHAT UI */
 .game-chat-container {
   position: absolute;
   top: 20px;
