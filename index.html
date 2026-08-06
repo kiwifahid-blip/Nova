@@ -32,14 +32,17 @@
   <div class="top-bar">
     <div class="profile-section">
       <div class="profile-avatar"></div>
-      <h1>Welcome, <span id="username">Loading...</span></h1>
+      <div class="profile-details">
+        <h1>Welcome, <span id="username">Loading...</span></h1>
+        <div class="player-id-badge">ID: #<span id="player-id-display">--</span></div>
+      </div>
     </div>
 
     <div class="friends-box" id="friends-box"></div>
 
     <div class="friend-search-container">
       <div class="friend-search-bar">
-        <input type="text" id="search-person-input" placeholder="Search people..." />
+        <input type="text" id="search-person-input" placeholder="Search ID or name..." />
         <button type="button" id="search-person-btn">Search</button>
       </div>
       <div id="search-results-dropdown" class="search-results-dropdown hidden"></div>
