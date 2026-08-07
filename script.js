@@ -2,7 +2,7 @@
 // 1. SUPABASE CLIENT INITIALIZATION
 // ==========================================
 const SUPABASE_URL = "https://byxzktunhhvxdntddpeo.supabase.co";
-const SUPABASE_KEY = "sb_publishable_zTjxmELF8PntXEw1fqT-RQ__YJZlw1y"; // Make sure to replace with your public anon key starting with eyJ...
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5eHprdHVuaGh2eGRudGRkcGVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMTc2ODEsImV4cCI6MjEwMDU5MzY4MX0.o6KaXocIdyR3c1uSWHA98TyHuoFT9Zf8rquTJdFQ0p4";
 
 const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
