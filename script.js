@@ -51,6 +51,7 @@ async function syncUserProfile(user) {
 
   const displayName = user.user_metadata?.display_name || user.email.split("@")[0];
 
+  // Fixed the select query string format
   const { data, error } = await supabaseClient
     .from("players")
     .upsert({
@@ -66,6 +67,8 @@ async function syncUserProfile(user) {
     if (playerIdDisplay) {
       playerIdDisplay.textContent = currentNumericId;
     }
+  } else if (error) {
+    console.error("Profile sync error:", error);
   }
 }
 
@@ -183,7 +186,6 @@ function initRealtime() {
 
   gameChannel = supabaseClient.channel('nova-game-room');
 
-  // Listen for position & chat broadcasts from other players
   gameChannel
     .on('broadcast', { event: 'player-move' }, (payload) => {
       const p = payload.payload;
@@ -205,7 +207,7 @@ function initRealtime() {
       updatePlayerCounts();
     })
     .subscribe((status) => {
-      console.log("Realtime connection status:", status);
+      console.log("Realtime status:", status);
     });
 }
 
@@ -329,28 +331,7 @@ const pauseMenu = document.getElementById("pause-menu");
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas ? canvas.getContext("2d") : null;
 
-// Character Sprites
-const idle1Sprite = new Image();
-idle1Sprite.crossOrigin = "anonymous";
-idle1Sprite.src = "https://i.imgur.com/GynwpQb.png";
-
-const idle2Sprite = new Image();
-idle2Sprite.crossOrigin = "anonymous";
-idle2Sprite.src = "https://i.imgur.com/2tmFG15.png";
-
-const walk1Sprite = new Image();
-walk1Sprite.crossOrigin = "anonymous";
-walk1Sprite.src = "https://i.imgur.com/HdoZEFA.png";
-
-const walk2Sprite = new Image();
-walk2Sprite.crossOrigin = "anonymous";
-walk2Sprite.src = "https://i.imgur.com/0K6RSYe.png";
-
-let animTimer = 0;
-let walkFrame = 1;
-let idleFrame = 1;
 let facingRight = true;
-
 let gameAnimationId = null;
 let isGamePlaying = false;
 let isPaused = false;
@@ -565,25 +546,12 @@ function drawGame() {
   ctx.fillStyle = "#2e8b57";
   ctx.fillRect(0, canvas.height - groundHeight, canvas.width, 20);
 
-  // Animation Toggle
-  animTimer++;
-  const isMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
-  let activeSprite;
-
-  if (isMoving) {
-    if (animTimer % 8 === 0) walkFrame = (walkFrame === 1) ? 2 : 1;
-    activeSprite = (walkFrame === 1) ? walk1Sprite : walk2Sprite;
-  } else {
-    if (animTimer % 30 === 0) idleFrame = (idleFrame === 1) ? 2 : 1;
-    activeSprite = (idleFrame === 1) ? idle1Sprite : idle2Sprite;
-  }
-
   // Draw Other Online Players
   const now = Date.now();
   Object.keys(otherPlayers).forEach(id => {
     if (currentUser && id === currentUser.id) return;
     const p = otherPlayers[id];
-    drawCharacter(p.x, p.y, p.username, activeSprite, p.facingRight ?? true, p.numericId);
+    drawCharacter(p.x, p.y, p.username, p.facingRight ?? true, p.numericId, "#ff4757");
 
     if (p.lastMsg && !IGNORED_KEYS.includes(p.lastMsg) && now - p.msgTimestamp < 4000) {
       drawSpeechBubble(p.x + 30, p.y - 10, p.lastMsg);
@@ -592,14 +560,15 @@ function drawGame() {
 
   // Draw Current Player
   const myName = currentUser ? (currentUser.user_metadata?.display_name || currentUser.email.split("@")[0]) : "You";
-  drawCharacter(player.x, player.y, myName, activeSprite, facingRight, currentNumericId);
+  drawCharacter(player.x, player.y, myName, facingRight, currentNumericId, "#2ed573");
 
   if (myLastMessage && !IGNORED_KEYS.includes(myLastMessage) && now - myMessageTime < 4000) {
     drawSpeechBubble(player.x + 30, player.y - 10, myLastMessage);
   }
 }
 
-function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numericId = null) {
+// Custom vector drawing so sprites never fail to render (Fixes Imgur 403 error)
+function drawCharacter(px, py, username, isFacingRight = true, numericId = null, color = "#2ed573") {
   if (!ctx) return;
   
   ctx.fillStyle = "#ffffff";
@@ -611,17 +580,23 @@ function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numeri
 
   ctx.save();
 
-  if (!isFacingRight) {
-    ctx.translate(px + player.width, py);
-    ctx.scale(-1, 1);
-    if (spriteImg.complete && spriteImg.naturalWidth !== 0) {
-      ctx.drawImage(spriteImg, 0, 0, player.width, player.height);
-    }
-  } else {
-    if (spriteImg.complete && spriteImg.naturalWidth !== 0) {
-      ctx.drawImage(spriteImg, px, py, player.width, player.height);
-    }
-  }
+  // Character body
+  ctx.fillStyle = color;
+  ctx.fillRect(px + 10, py + 15, 40, 45);
+
+  // Head
+  ctx.fillStyle = "#ffeaa7";
+  ctx.fillRect(px + 15, py, 30, 25);
+
+  // Eyes
+  ctx.fillStyle = "#2d3436";
+  const eyeOffset = isFacingRight ? 35 : 18;
+  ctx.fillRect(px + eyeOffset, py + 8, 6, 6);
+
+  // Legs
+  ctx.fillStyle = "#2d3436";
+  ctx.fillRect(px + 15, py + 60, 12, 10);
+  ctx.fillRect(px + 33, py + 60, 12, 10);
 
   ctx.restore();
 }
