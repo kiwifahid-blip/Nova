@@ -259,23 +259,12 @@ function leaveGamePresence() {
 // ==========================================
 // 4. IN-GAME MULTIPLAYER CHAT LOGIC
 // ==========================================
-const chatMessagesList = document.getElementById("chat-messages");
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
 
 let myLastMessage = "";
 let myMessageTime = 0;
 const IGNORED_KEYS = ["w", "a", "s", "d", "W", "A", "S", "D"];
-
-function appendChatMessage(username, text) {
-  if (!text || IGNORED_KEYS.includes(text.trim())) return;
-
-  const item = document.createElement("div");
-  item.className = "chat-message-item";
-  item.innerHTML = `<span class="chat-author">${username}:</span> ${text}`;
-  chatMessagesList.appendChild(item);
-  chatMessagesList.scrollTop = chatMessagesList.scrollHeight;
-}
 
 if (chatForm) {
   chatForm.addEventListener("submit", async (e) => {
@@ -288,12 +277,10 @@ if (chatForm) {
       return;
     }
 
-    const username = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
-
+    // Update message locally and broadcast to other players
     myLastMessage = text;
     myMessageTime = Date.now();
     
-    appendChatMessage(username, text);
     broadcastMyPosition();
 
     chatInput.value = "";
@@ -626,7 +613,7 @@ function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numeri
 
   ctx.save();
 
-  // Draw Image Sprite if loaded, otherwise fallback to colored box
+  // Draw Image Sprite if loaded, otherwise fallback to pixel block
   if (spriteImg && spriteImg.complete && spriteImg.naturalWidth !== 0) {
     if (!isFacingRight) {
       ctx.translate(px + player.width, py);
@@ -636,7 +623,6 @@ function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numeri
       ctx.drawImage(spriteImg, px, py, player.width, player.height);
     }
   } else {
-    // Fallback block if image fails
     ctx.fillStyle = "#2ed573";
     ctx.fillRect(px, py, player.width, player.height);
   }
