@@ -8,7 +8,7 @@ const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_U
 
 
 // ==========================================
-// 2. AUTHENTICATION LOGIC & PROFILE MANAGEMENT
+// 2. AUTHENTICATION & PROFILE MANAGEMENT
 // ==========================================
 const authScreen = document.getElementById("auth-screen");
 const authTitle = document.getElementById("auth-title");
@@ -159,6 +159,7 @@ if (supabaseClient) {
       }
       await syncUserProfile(currentUser);
       renderFriends([]);
+      initRealtime();
     } else {
       currentUser = null;
       authScreen.classList.remove("hidden");
@@ -168,83 +169,80 @@ if (supabaseClient) {
 
 
 // ==========================================
-// 3. MULTIPLAYER PRESENCE & STATS
+// 3. MULTIPLAYER WEBSOCKET BROADCAST SYSTEM
 // ==========================================
 const visitCountEl = document.getElementById("visit-count");
 const playingCountEl = document.getElementById("playing-count");
 const dashboardPeopleCountEl = document.getElementById("dashboard-people-count");
 
 let otherPlayers = {};
-let lastDbUpdate = 0;
+let gameChannel = null;
 
-if (supabaseClient) {
-  supabaseClient
-    .channel("public:players")
-    .on("postgres_changes", { event: "*", schema: "public", table: "players" }, (payload) => {
-      if (payload.eventType === "DELETE") {
-        delete otherPlayers[payload.old.id];
-      } else {
-        const playerObj = payload.new;
-        otherPlayers[playerObj.id] = {
-          username: playerObj.username,
-          numericId: playerObj.player_id,
-          x: playerObj.x,
-          y: playerObj.y,
-          lastMsg: playerObj.last_msg,
-          msgTimestamp: playerObj.msg_timestamp
-        };
-      }
-      const activeCount = Object.keys(otherPlayers).length;
-      if (playingCountEl) playingCountEl.textContent = activeCount;
-      if (dashboardPeopleCountEl) dashboardPeopleCountEl.textContent = activeCount;
+function initRealtime() {
+  if (!supabaseClient) return;
+
+  gameChannel = supabaseClient.channel('nova-game-room');
+
+  // Listen for position & chat broadcasts from other players
+  gameChannel
+    .on('broadcast', { event: 'player-move' }, (payload) => {
+      const p = payload.payload;
+      if (currentUser && p.id === currentUser.id) return;
+      
+      otherPlayers[p.id] = {
+        username: p.username,
+        numericId: p.numericId,
+        x: p.x,
+        y: p.y,
+        facingRight: p.facingRight,
+        lastMsg: p.lastMsg,
+        msgTimestamp: p.msgTimestamp
+      };
+      updatePlayerCounts();
     })
-    .subscribe();
+    .on('broadcast', { event: 'player-leave' }, (payload) => {
+      delete otherPlayers[payload.payload.id];
+      updatePlayerCounts();
+    })
+    .subscribe((status) => {
+      console.log("Realtime connection status:", status);
+    });
 }
 
-function enterGamePresence() {
-  if (!currentUser || !supabaseClient) return;  
-  myLastMessage = "";
-  myMessageTime = 0;
+function updatePlayerCounts() {
+  const activeCount = Object.keys(otherPlayers).length;
+  if (playingCountEl) playingCountEl.textContent = activeCount;
+  if (dashboardPeopleCountEl) dashboardPeopleCountEl.textContent = activeCount;
+}
 
-  supabaseClient.from("players").upsert({
-    id: currentUser.id,
-    username: currentUser.user_metadata?.display_name || currentUser.email.split("@")[0],
-    player_id: currentNumericId,
-    x: Math.round(player.x),
-    y: Math.round(player.y),
-    last_msg: "",
-    msg_timestamp: 0,
-    last_seen: new Date().toISOString()
+function broadcastMyPosition() {
+  if (!currentUser || !gameChannel) return;
+
+  const myName = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
+
+  gameChannel.send({
+    type: 'broadcast',
+    event: 'player-move',
+    payload: {
+      id: currentUser.id,
+      username: myName,
+      numericId: currentNumericId,
+      x: Math.round(player.x),
+      y: Math.round(player.y),
+      facingRight: facingRight,
+      lastMsg: myLastMessage,
+      msgTimestamp: myMessageTime
+    }
   });
 }
 
-async function updateMyPositionInDB(force = false) {
-  if (!currentUser || !supabaseClient) return;
-
-  const now = Date.now();
-  if (!force && now - lastDbUpdate < 50) return;
-  lastDbUpdate = now;
-
-  if (myLastMessage && now - myMessageTime > 4000) {
-    myLastMessage = "";
-    myMessageTime = 0;
-  }
-
-  await supabaseClient.from("players").upsert({
-    id: currentUser.id,
-    username: currentUser.user_metadata?.display_name || currentUser.email.split("@")[0],
-    player_id: currentNumericId,
-    x: Math.round(player.x),
-    y: Math.round(player.y),
-    last_msg: myLastMessage,
-    msg_timestamp: myMessageTime,
-    last_seen: new Date().toISOString()
+function leaveGamePresence() {
+  if (!currentUser || !gameChannel) return;
+  gameChannel.send({
+    type: 'broadcast',
+    event: 'player-leave',
+    payload: { id: currentUser.id }
   });
-}
-
-async function leaveGamePresence() {
-  if (!currentUser || !supabaseClient) return;
-  await supabaseClient.from("players").delete().eq("id", currentUser.id);
 }
 
 
@@ -269,38 +267,6 @@ function appendChatMessage(username, text) {
   chatMessagesList.scrollTop = chatMessagesList.scrollHeight;
 }
 
-async function loadChatHistory() {
-  if (!supabaseClient) return;
-
-  const { data, error } = await supabaseClient
-    .from("messages")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(15);
-
-  if (error) {
-    console.error("Error loading chat history:", error);
-    return;
-  }
-
-  chatMessagesList.innerHTML = "";
-  if (data) {
-    data.reverse().forEach(msg => appendChatMessage(msg.username, msg.text));
-  }
-}
-
-if (supabaseClient) {
-  loadChatHistory();
-
-  supabaseClient
-    .channel("public:messages")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-      const newMsg = payload.new;
-      appendChatMessage(newMsg.username, newMsg.text);
-    })
-    .subscribe();
-}
-
 if (chatForm) {
   chatForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -316,15 +282,9 @@ if (chatForm) {
 
     myLastMessage = text;
     myMessageTime = Date.now();
-    updateMyPositionInDB(true);
-
-    if (supabaseClient) {
-      const { error } = await supabaseClient
-        .from("messages")
-        .insert([{ username: username, text: text }]);
-
-      if (error) console.error("Error sending message to Supabase:", error);
-    }
+    
+    appendChatMessage(username, text);
+    broadcastMyPosition();
 
     chatInput.value = "";
     chatInput.blur();
@@ -357,7 +317,7 @@ if (backBtn) {
 
 
 // ==========================================
-// 6. 8-BIT GAME ENGINE & CANVAS RENDERING
+// 6. GAME ENGINE & CANVAS RENDERING
 // ==========================================
 const gameDetailsContainer = document.getElementById("game-details-container");
 const gameCanvasContainer = document.getElementById("game-canvas-container");
@@ -499,8 +459,8 @@ if (startPlayBtn) {
     resetKeys();
 
     if (pauseMenu) pauseMenu.classList.add("hidden");
-    enterGamePresence();
     resetPlayer();
+    broadcastMyPosition();
     gameLoop();
   });
 }
@@ -580,7 +540,7 @@ function updateGame() {
   }
 
   if (moved || Math.abs(player.velocityY) > 0.1) {
-    updateMyPositionInDB();
+    broadcastMyPosition();
   }
 }
 
@@ -623,7 +583,7 @@ function drawGame() {
   Object.keys(otherPlayers).forEach(id => {
     if (currentUser && id === currentUser.id) return;
     const p = otherPlayers[id];
-    drawCharacter(p.x, p.y, p.username, activeSprite, true, p.numericId);
+    drawCharacter(p.x, p.y, p.username, activeSprite, p.facingRight ?? true, p.numericId);
 
     if (p.lastMsg && !IGNORED_KEYS.includes(p.lastMsg) && now - p.msgTimestamp < 4000) {
       drawSpeechBubble(p.x + 30, p.y - 10, p.lastMsg);
