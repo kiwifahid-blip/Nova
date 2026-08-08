@@ -52,14 +52,12 @@ async function syncUserProfile(user) {
   const displayName = user.user_metadata?.display_name || user.email.split("@")[0];
 
   try {
-    // 1. Try fetching existing user profile
     let { data, error } = await supabaseClient
       .from("players")
       .select("player_id, username")
       .eq("id", user.id)
       .maybeSingle();
 
-    // 2. If no record exists, insert a new record
     if (!data) {
       const insertResult = await supabaseClient
         .from("players")
@@ -75,7 +73,6 @@ async function syncUserProfile(user) {
       error = insertResult.error;
     }
 
-    // 3. Update numeric ID in app memory and UI
     if (data && data.player_id) {
       currentNumericId = data.player_id;
       if (playerIdDisplay) {
@@ -187,7 +184,79 @@ if (supabaseClient) {
 
 
 // ==========================================
-// 3. MULTIPLAYER WEBSOCKET BROADCAST SYSTEM
+// 3. FRIEND SEARCH LOGIC
+// ==========================================
+const friendSearchInput = document.getElementById("friend-search-input");
+const friendSearchBtn = document.getElementById("friend-search-btn");
+
+if (friendSearchBtn) {
+  friendSearchBtn.addEventListener("click", async () => {
+    let query = friendSearchInput ? friendSearchInput.value.trim() : "";
+    if (!query || !supabaseClient) return;
+
+    query = query.replace("#", "");
+
+    try {
+      let dbQuery = supabaseClient
+        .from("players")
+        .select("id, player_id, username");
+
+      if (!isNaN(query) && query !== "") {
+        dbQuery = dbQuery.eq("player_id", parseInt(query, 10));
+      } else {
+        dbQuery = dbQuery.ilike("username", `%${query}%`);
+      }
+
+      const { data, error } = await dbQuery;
+
+      if (error) throw error;
+
+      renderSearchResults(data || []);
+    } catch (err) {
+      console.error("Search Error:", err);
+    }
+  });
+}
+
+function renderSearchResults(results) {
+  if (!friendsBox) return;
+
+  friendsBox.innerHTML = "";
+
+  const validResults = results.filter(p => !currentUser || p.id !== currentUser.id);
+
+  if (validResults.length === 0) {
+    friendsBox.innerHTML = `<span style="color: #888; font-style: italic;">No players found</span>`;
+    return;
+  }
+
+  validResults.forEach(player => {
+    const item = document.createElement("div");
+    item.className = "friend-item";
+    item.style.display = "flex";
+    item.style.justifyContent = "space-between";
+    item.style.alignItems = "center";
+    item.style.marginBottom = "6px";
+
+    item.innerHTML = `
+      <span>${player.username} (#${player.player_id})</span>
+      <button class="add-friend-btn" style="padding: 2px 8px; cursor: pointer; border-radius: 4px; border: none; background: #2ed573; color: white;">Add</button>
+    `;
+
+    const addBtn = item.querySelector(".add-friend-btn");
+    addBtn.addEventListener("click", () => {
+      addBtn.textContent = "Added!";
+      addBtn.style.background = "#666";
+      addBtn.disabled = true;
+    });
+
+    friendsBox.appendChild(item);
+  });
+}
+
+
+// ==========================================
+// 4. MULTIPLAYER WEBSOCKET BROADCAST SYSTEM
 // ==========================================
 const visitCountEl = document.getElementById("visit-count");
 const playingCountEl = document.getElementById("playing-count");
@@ -216,7 +285,7 @@ function initRealtime() {
       if (currentUser && p.id === currentUser.id) return;
       
       const prevX = otherPlayers[p.id]?.x ?? p.x;
-      const isMoving = prevX !== p.x; // Movement check for animations
+      const isMoving = prevX !== p.x;
 
       otherPlayers[p.id] = {
         username: p.username,
@@ -280,7 +349,7 @@ function leaveGamePresence() {
 
 
 // ==========================================
-// 4. IN-GAME MULTIPLAYER CHAT LOGIC
+// 5. IN-GAME MULTIPLAYER CHAT LOGIC
 // ==========================================
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
@@ -312,7 +381,7 @@ if (chatForm) {
 
 
 // ==========================================
-// 5. PAGE NAVIGATION LOGIC
+// 6. PAGE NAVIGATION LOGIC
 // ==========================================
 const dashboardView = document.getElementById("dashboard-view");
 const gamePageView = document.getElementById("game-page-view");
@@ -336,7 +405,7 @@ if (backBtn) {
 
 
 // ==========================================
-// 6. GAME ENGINE & CANVAS RENDERING
+// 7. GAME ENGINE & CANVAS RENDERING
 // ==========================================
 const gameDetailsContainer = document.getElementById("game-details-container");
 const gameCanvasContainer = document.getElementById("game-canvas-container");
