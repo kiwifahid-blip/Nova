@@ -51,21 +51,39 @@ async function syncUserProfile(user) {
 
   const displayName = user.user_metadata?.display_name || user.email.split("@")[0];
 
-  const { data, error } = await supabaseClient
-    .from("players")
-    .upsert({
-      id: user.id,
-      username: displayName,
-      last_seen: new Date().toISOString()
-    }, { onConflict: 'id' })
-    .select("player_id, username")
-    .single();
+  try {
+    // 1. Try fetching existing user profile
+    let { data, error } = await supabaseClient
+      .from("players")
+      .select("player_id, username")
+      .eq("id", user.id)
+      .maybeSingle();
 
-  if (!error && data) {
-    currentNumericId = data.player_id;
-    if (playerIdDisplay) {
-      playerIdDisplay.textContent = currentNumericId;
+    // 2. If no record exists, insert a new record
+    if (!data) {
+      const insertResult = await supabaseClient
+        .from("players")
+        .upsert({
+          id: user.id,
+          username: displayName,
+          last_seen: new Date().toISOString()
+        }, { onConflict: 'id' })
+        .select("player_id, username")
+        .single();
+
+      data = insertResult.data;
+      error = insertResult.error;
     }
+
+    // 3. Update numeric ID in app memory and UI
+    if (data && data.player_id) {
+      currentNumericId = data.player_id;
+      if (playerIdDisplay) {
+        playerIdDisplay.textContent = currentNumericId;
+      }
+    }
+  } catch (err) {
+    console.error("Profile Sync Error:", err);
   }
 }
 
@@ -198,7 +216,7 @@ function initRealtime() {
       if (currentUser && p.id === currentUser.id) return;
       
       const prevX = otherPlayers[p.id]?.x ?? p.x;
-      const isMoving = prevX !== p.x; // Check if x changed to determine movement
+      const isMoving = prevX !== p.x; // Movement check for animations
 
       otherPlayers[p.id] = {
         username: p.username,
@@ -218,7 +236,7 @@ function initRealtime() {
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        broadcastMyPosition();
+        broadcastMyPosition(false);
       }
     });
 }
@@ -609,7 +627,7 @@ function drawGame() {
 function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numericId = null) {
   if (!ctx) return;
   
-  // Username Label
+  // Username Label above head
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 14px monospace";
   ctx.textAlign = "center";
@@ -653,6 +671,7 @@ function drawSpeechBubble(centerX, topY, text) {
   ctx.fillRect(bx, by, bubbleWidth, bubbleHeight);
   ctx.strokeRect(bx, by, bubbleWidth, bubbleHeight);
 
+  // Bubble Pointer Arrow
   ctx.beginPath();
   ctx.moveTo(centerX - 4, by + bubbleHeight);
   ctx.lineTo(centerX, by + bubbleHeight + 6);
