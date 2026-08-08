@@ -15,6 +15,7 @@ const authTitle = document.getElementById("auth-title");
 const authBtn = document.getElementById("auth-btn");
 const toggleAuthMode = document.getElementById("toggle-auth-mode");
 const usernameInput = document.getElementById("auth-username");
+const genderInput = document.getElementById("auth-gender"); // Gender Select Element
 const emailInput = document.getElementById("auth-email");
 const passwordInput = document.getElementById("auth-password");
 const errorMsg = document.getElementById("auth-error");
@@ -27,6 +28,7 @@ const friendsBox = document.getElementById("friends-box");
 let isSignUp = true; 
 let currentUser = null;
 let currentNumericId = null;
+let currentUserGender = "boy"; 
 
 const ORIGINAL_GAME_CREATOR = "898"; 
 
@@ -36,25 +38,29 @@ toggleAuthMode.addEventListener("click", () => {
     authTitle.textContent = "Sign Up";
     authBtn.textContent = "Sign Up";
     usernameInput.style.display = "block";
+    if (genderInput) genderInput.style.display = "block";
     toggleAuthMode.textContent = "Log In";
   } else {
     authTitle.textContent = "Log In";
     authBtn.textContent = "Log In";
     usernameInput.style.display = "none";
+    if (genderInput) genderInput.style.display = "none";
     toggleAuthMode.textContent = "Sign Up";
   }
   errorMsg.textContent = "";
 });
 
-async function syncUserProfile(user) {
+async function syncUserProfile(user, selectedGender = "boy") {
   if (!user || !supabaseClient) return;
 
   const displayName = user.user_metadata?.display_name || user.email.split("@")[0];
+  const userGender = user.user_metadata?.gender || selectedGender;
+  currentUserGender = userGender;
 
   try {
     let { data, error } = await supabaseClient
       .from("players")
-      .select("player_id, username")
+      .select("player_id, username, gender")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -64,20 +70,22 @@ async function syncUserProfile(user) {
         .upsert({
           id: user.id,
           username: displayName,
+          gender: userGender,
           last_seen: new Date().toISOString()
         }, { onConflict: 'id' })
-        .select("player_id, username")
+        .select("player_id, username, gender")
         .single();
 
       data = insertResult.data;
       error = insertResult.error;
     }
 
-    if (data && data.player_id) {
-      currentNumericId = data.player_id;
-      if (playerIdDisplay) {
-        playerIdDisplay.textContent = currentNumericId;
+    if (data) {
+      if (data.player_id) {
+        currentNumericId = data.player_id;
+        if (playerIdDisplay) playerIdDisplay.textContent = currentNumericId;
       }
+      if (data.gender) currentUserGender = data.gender;
     }
   } catch (err) {
     console.error("Profile Sync Error:", err);
@@ -89,6 +97,7 @@ authBtn.addEventListener("click", async (e) => {
   const email = emailInput.value.trim();
   const password = passwordInput.value.trim();
   const username = usernameInput.value.trim();
+  const gender = genderInput ? genderInput.value : "boy";
 
   errorMsg.textContent = "";
 
@@ -112,7 +121,12 @@ authBtn.addEventListener("click", async (e) => {
       const { data, error } = await supabaseClient.auth.signUp({
         email,
         password,
-        options: { data: { display_name: username } }
+        options: { 
+          data: { 
+            display_name: username,
+            gender: gender 
+          } 
+        }
       });
 
       if (error) throw error;
@@ -120,7 +134,7 @@ authBtn.addEventListener("click", async (e) => {
       if (currentUser) {
         usernameDisplay.textContent = username;
         if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
-        await syncUserProfile(currentUser);
+        await syncUserProfile(currentUser, gender);
         authScreen.classList.add("hidden");
       }
     } else {
@@ -290,6 +304,7 @@ function initRealtime() {
       otherPlayers[p.id] = {
         username: p.username,
         numericId: p.numericId,
+        gender: p.gender || "boy",
         x: p.x,
         y: p.y,
         facingRight: p.facingRight,
@@ -328,6 +343,7 @@ function broadcastMyPosition(isMoving = false) {
       id: currentUser.id,
       username: myName,
       numericId: currentNumericId,
+      gender: currentUserGender,
       x: Math.round(player.x),
       y: Math.round(player.y),
       facingRight: facingRight,
@@ -417,22 +433,17 @@ const pauseMenu = document.getElementById("pause-menu");
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas ? canvas.getContext("2d") : null;
 
-// LOAD CHARACTER SPRITES SAFELY
-const idle1Sprite = new Image();
-idle1Sprite.crossOrigin = "anonymous";
-idle1Sprite.src = "https://i.imgur.com/GynwpQb.png";
+// LOAD MALE SPRITES
+const maleIdle1 = new Image(); maleIdle1.crossOrigin = "anonymous"; maleIdle1.src = "https://i.imgur.com/GynwpQb.png";
+const maleIdle2 = new Image(); maleIdle2.crossOrigin = "anonymous"; maleIdle2.src = "https://i.imgur.com/2tmFG15.png";
+const maleWalk1 = new Image(); maleWalk1.crossOrigin = "anonymous"; maleWalk1.src = "https://i.imgur.com/HdoZEFA.png";
+const maleWalk2 = new Image(); maleWalk2.crossOrigin = "anonymous"; maleWalk2.src = "https://i.imgur.com/0K6RSYe.png";
 
-const idle2Sprite = new Image();
-idle2Sprite.crossOrigin = "anonymous";
-idle2Sprite.src = "https://i.imgur.com/2tmFG15.png";
-
-const walk1Sprite = new Image();
-walk1Sprite.crossOrigin = "anonymous";
-walk1Sprite.src = "https://i.imgur.com/HdoZEFA.png";
-
-const walk2Sprite = new Image();
-walk2Sprite.crossOrigin = "anonymous";
-walk2Sprite.src = "https://i.imgur.com/0K6RSYe.png";
+// LOAD FEMALE SPRITES (Updated with direct image links)
+const femaleIdle1 = new Image(); femaleIdle1.crossOrigin = "anonymous"; femaleIdle1.src = "https://i.imgur.com/Q4Yyzz0.png";
+const femaleIdle2 = new Image(); femaleIdle2.crossOrigin = "anonymous"; femaleIdle2.src = "https://i.imgur.com/zuFvwky.png";
+const femaleWalk1 = new Image(); femaleWalk1.crossOrigin = "anonymous"; femaleWalk1.src = "https://i.imgur.com/eHyNVgJ.png";
+const femaleWalk2 = new Image(); femaleWalk2.crossOrigin = "anonymous"; femaleWalk2.src = "https://i.imgur.com/gdFqVVX.png";
 
 let globalAnimTimer = 0;
 let facingRight = true;
@@ -633,13 +644,20 @@ function updateGame() {
   }
 }
 
-function getSpriteForPlayer(isMoving) {
+function getSpriteForPlayer(isMoving, gender = "boy") {
+  const isGirl = (gender.toLowerCase() === "female" || gender.toLowerCase() === "girl");
+  
+  const idle1 = isGirl ? femaleIdle1 : maleIdle1;
+  const idle2 = isGirl ? femaleIdle2 : maleIdle2;
+  const walk1 = isGirl ? femaleWalk1 : maleWalk1;
+  const walk2 = isGirl ? femaleWalk2 : maleWalk2;
+
   if (isMoving) {
     const walkFrame = Math.floor(globalAnimTimer / 8) % 2;
-    return walkFrame === 0 ? walk1Sprite : walk2Sprite;
+    return walkFrame === 0 ? walk1 : walk2;
   } else {
     const idleFrame = Math.floor(globalAnimTimer / 30) % 2;
-    return idleFrame === 0 ? idle1Sprite : idle2Sprite;
+    return idleFrame === 0 ? idle1 : idle2;
   }
 }
 
@@ -672,9 +690,9 @@ function drawGame() {
   Object.keys(otherPlayers).forEach(id => {
     if (currentUser && id === currentUser.id) return;
     const p = otherPlayers[id];
-    const remoteSprite = getSpriteForPlayer(p.isMoving);
+    const remoteSprite = getSpriteForPlayer(p.isMoving, p.gender);
 
-    drawCharacter(p.x, p.y, p.username, remoteSprite, p.facingRight ?? true, p.numericId);
+    drawCharacter(p.x, p.y, p.username, remoteSprite, p.facingRight ?? true, p.numericId, p.gender);
 
     if (p.lastMsg && !IGNORED_KEYS.includes(p.lastMsg) && now - p.msgTimestamp < 4000) {
       drawSpeechBubble(p.x + 30, p.y - 10, p.lastMsg);
@@ -683,20 +701,19 @@ function drawGame() {
 
   // Draw Main Local Player
   const isLocalMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
-  const localSprite = getSpriteForPlayer(isLocalMoving);
+  const localSprite = getSpriteForPlayer(isLocalMoving, currentUserGender);
   const myName = currentUser ? (currentUser.user_metadata?.display_name || currentUser.email.split("@")[0]) : "You";
 
-  drawCharacter(player.x, player.y, myName, localSprite, facingRight, currentNumericId);
+  drawCharacter(player.x, player.y, myName, localSprite, facingRight, currentNumericId, currentUserGender);
 
   if (myLastMessage && !IGNORED_KEYS.includes(myLastMessage) && now - myMessageTime < 4000) {
     drawSpeechBubble(player.x + 30, player.y - 10, myLastMessage);
   }
 }
 
-function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numericId = null) {
+function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numericId = null, gender = "boy") {
   if (!ctx) return;
   
-  // Username Label above head
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 14px monospace";
   ctx.textAlign = "center";
@@ -715,7 +732,9 @@ function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numeri
       ctx.drawImage(spriteImg, px, py, player.width, player.height);
     }
   } else {
-    ctx.fillStyle = "#2ed573";
+    // Fallback block color if image fails
+    const isGirl = (gender.toLowerCase() === "female" || gender.toLowerCase() === "girl");
+    ctx.fillStyle = isGirl ? "#ff78ae" : "#2ed573";
     ctx.fillRect(px, py, player.width, player.height);
   }
 
@@ -740,7 +759,6 @@ function drawSpeechBubble(centerX, topY, text) {
   ctx.fillRect(bx, by, bubbleWidth, bubbleHeight);
   ctx.strokeRect(bx, by, bubbleWidth, bubbleHeight);
 
-  // Bubble Pointer Arrow
   ctx.beginPath();
   ctx.moveTo(centerX - 4, by + bubbleHeight);
   ctx.lineTo(centerX, by + bubbleHeight + 6);
