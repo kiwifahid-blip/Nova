@@ -197,12 +197,16 @@ function initRealtime() {
       const p = payload.payload;
       if (currentUser && p.id === currentUser.id) return;
       
+      const prevX = otherPlayers[p.id]?.x ?? p.x;
+      const isMoving = prevX !== p.x; // Check if x changed to determine movement
+
       otherPlayers[p.id] = {
         username: p.username,
         numericId: p.numericId,
         x: p.x,
         y: p.y,
         facingRight: p.facingRight,
+        isMoving: isMoving,
         lastMsg: p.lastMsg,
         msgTimestamp: p.msgTimestamp
       };
@@ -225,7 +229,7 @@ function updatePlayerCounts() {
   if (dashboardPeopleCountEl) dashboardPeopleCountEl.textContent = activeCount;
 }
 
-function broadcastMyPosition() {
+function broadcastMyPosition(isMoving = false) {
   if (!currentUser || !gameChannel) return;
 
   const myName = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
@@ -240,6 +244,7 @@ function broadcastMyPosition() {
       x: Math.round(player.x),
       y: Math.round(player.y),
       facingRight: facingRight,
+      isMoving: isMoving,
       lastMsg: myLastMessage,
       msgTimestamp: myMessageTime
     }
@@ -277,11 +282,10 @@ if (chatForm) {
       return;
     }
 
-    // Update message locally and broadcast to other players
     myLastMessage = text;
     myMessageTime = Date.now();
     
-    broadcastMyPosition();
+    broadcastMyPosition(false);
 
     chatInput.value = "";
     chatInput.blur();
@@ -343,9 +347,7 @@ const walk2Sprite = new Image();
 walk2Sprite.crossOrigin = "anonymous";
 walk2Sprite.src = "https://i.imgur.com/0K6RSYe.png";
 
-let animTimer = 0;
-let walkFrame = 1;
-let idleFrame = 1;
+let globalAnimTimer = 0;
 let facingRight = true;
 
 let gameAnimationId = null;
@@ -460,7 +462,7 @@ if (startPlayBtn) {
 
     if (pauseMenu) pauseMenu.classList.add("hidden");
     resetPlayer();
-    broadcastMyPosition();
+    broadcastMyPosition(false);
     gameLoop();
   });
 }
@@ -540,12 +542,24 @@ function updateGame() {
   }
 
   if (moved || Math.abs(player.velocityY) > 0.1) {
-    broadcastMyPosition();
+    broadcastMyPosition(moved);
+  }
+}
+
+function getSpriteForPlayer(isMoving) {
+  if (isMoving) {
+    const walkFrame = Math.floor(globalAnimTimer / 8) % 2;
+    return walkFrame === 0 ? walk1Sprite : walk2Sprite;
+  } else {
+    const idleFrame = Math.floor(globalAnimTimer / 30) % 2;
+    return idleFrame === 0 ? idle1Sprite : idle2Sprite;
   }
 }
 
 function drawGame() {
   if (!ctx || !canvas) return;
+
+  globalAnimTimer++;
 
   // Background
   ctx.fillStyle = "#70c5ce";
@@ -565,35 +579,27 @@ function drawGame() {
   ctx.fillStyle = "#2e8b57";
   ctx.fillRect(0, canvas.height - groundHeight, canvas.width, 20);
 
-  // Sprite animation toggle
-  animTimer++;
-  const isMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
-  let activeSprite;
-
-  if (isMoving) {
-    if (animTimer % 8 === 0) walkFrame = (walkFrame === 1) ? 2 : 1;
-    activeSprite = (walkFrame === 1) ? walk1Sprite : walk2Sprite;
-  } else {
-    if (animTimer % 30 === 0) idleFrame = (idleFrame === 1) ? 2 : 1;
-    activeSprite = (idleFrame === 1) ? idle1Sprite : idle2Sprite;
-  }
-
   const now = Date.now();
 
   // Draw Other Connected Players
   Object.keys(otherPlayers).forEach(id => {
     if (currentUser && id === currentUser.id) return;
     const p = otherPlayers[id];
-    drawCharacter(p.x, p.y, p.username, activeSprite, p.facingRight ?? true, p.numericId);
+    const remoteSprite = getSpriteForPlayer(p.isMoving);
+
+    drawCharacter(p.x, p.y, p.username, remoteSprite, p.facingRight ?? true, p.numericId);
 
     if (p.lastMsg && !IGNORED_KEYS.includes(p.lastMsg) && now - p.msgTimestamp < 4000) {
       drawSpeechBubble(p.x + 30, p.y - 10, p.lastMsg);
     }
   });
 
-  // Draw Main Player
+  // Draw Main Local Player
+  const isLocalMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
+  const localSprite = getSpriteForPlayer(isLocalMoving);
   const myName = currentUser ? (currentUser.user_metadata?.display_name || currentUser.email.split("@")[0]) : "You";
-  drawCharacter(player.x, player.y, myName, activeSprite, facingRight, currentNumericId);
+
+  drawCharacter(player.x, player.y, myName, localSprite, facingRight, currentNumericId);
 
   if (myLastMessage && !IGNORED_KEYS.includes(myLastMessage) && now - myMessageTime < 4000) {
     drawSpeechBubble(player.x + 30, player.y - 10, myLastMessage);
@@ -603,7 +609,7 @@ function drawGame() {
 function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numericId = null) {
   if (!ctx) return;
   
-  // Username Label above head
+  // Username Label
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 14px monospace";
   ctx.textAlign = "center";
@@ -613,7 +619,6 @@ function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numeri
 
   ctx.save();
 
-  // Draw Image Sprite if loaded, otherwise fallback to pixel block
   if (spriteImg && spriteImg.complete && spriteImg.naturalWidth !== 0) {
     if (!isFacingRight) {
       ctx.translate(px + player.width, py);
@@ -648,7 +653,6 @@ function drawSpeechBubble(centerX, topY, text) {
   ctx.fillRect(bx, by, bubbleWidth, bubbleHeight);
   ctx.strokeRect(bx, by, bubbleWidth, bubbleHeight);
 
-  // Speech bubble pointer arrow
   ctx.beginPath();
   ctx.moveTo(centerX - 4, by + bubbleHeight);
   ctx.lineTo(centerX, by + bubbleHeight + 6);
