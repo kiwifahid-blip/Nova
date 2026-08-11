@@ -33,23 +33,25 @@ let currentUserGender = "boy";
 
 const ORIGINAL_GAME_CREATOR = "898"; 
 
-toggleAuthMode.addEventListener("click", () => {
-  isSignUp = !isSignUp;
-  if (isSignUp) {
-    authTitle.textContent = "Sign Up";
-    authBtn.textContent = "Sign Up";
-    usernameInput.style.display = "block";
-    if (genderInput) genderInput.style.display = "block";
-    toggleAuthMode.textContent = "Log In";
-  } else {
-    authTitle.textContent = "Log In";
-    authBtn.textContent = "Log In";
-    usernameInput.style.display = "none";
-    if (genderInput) genderInput.style.display = "none";
-    toggleAuthMode.textContent = "Sign Up";
-  }
-  errorMsg.textContent = "";
-});
+if (toggleAuthMode) {
+  toggleAuthMode.addEventListener("click", () => {
+    isSignUp = !isSignUp;
+    if (isSignUp) {
+      authTitle.textContent = "Sign Up";
+      authBtn.textContent = "Sign Up";
+      if (usernameInput) usernameInput.style.display = "block";
+      if (genderInput) genderInput.style.display = "block";
+      toggleAuthMode.textContent = "Log In";
+    } else {
+      authTitle.textContent = "Log In";
+      authBtn.textContent = "Log In";
+      if (usernameInput) usernameInput.style.display = "none";
+      if (genderInput) genderInput.style.display = "none";
+      toggleAuthMode.textContent = "Sign Up";
+    }
+    errorMsg.textContent = "";
+  });
+}
 
 async function syncUserProfile(user, selectedGender = "boy") {
   if (!user || !supabaseClient) return;
@@ -93,74 +95,76 @@ async function syncUserProfile(user, selectedGender = "boy") {
   }
 }
 
-authBtn.addEventListener("click", async (e) => {
-  e.preventDefault();
-  const email = emailInput.value.trim();
-  const password = passwordInput.value.trim();
-  const username = usernameInput.value.trim();
-  const gender = genderInput ? genderInput.value : "boy";
+if (authBtn) {
+  authBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const email = emailInput ? emailInput.value.trim() : "";
+    const password = passwordInput ? passwordInput.value.trim() : "";
+    const username = usernameInput ? usernameInput.value.trim() : "";
+    const gender = genderInput ? genderInput.value : "boy";
 
-  errorMsg.textContent = "";
+    errorMsg.textContent = "";
 
-  if (!email || !password) {
-    errorMsg.textContent = "Please fill in email and password!";
-    return;
-  }
-
-  if (password.length < 6) {
-    errorMsg.textContent = "Password must be at least 6 characters!";
-    return;
-  }
-
-  try {
-    if (isSignUp) {
-      if (!username) {
-        errorMsg.textContent = "Please enter a username!";
-        return;
-      }
-
-      const { data, error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-        options: { 
-          data: { 
-            display_name: username,
-            gender: gender 
-          } 
-        }
-      });
-
-      if (error) throw error;
-      currentUser = data.user;
-      if (currentUser) {
-        usernameDisplay.textContent = username;
-        if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
-        await syncUserProfile(currentUser, gender);
-        authScreen.classList.add("hidden");
-        initRealtime();
-      }
-    } else {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) throw error;
-      currentUser = data.user;
-      if (currentUser) {
-        const name = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
-        usernameDisplay.textContent = name;
-        if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
-        await syncUserProfile(currentUser);
-        authScreen.classList.add("hidden");
-        initRealtime();
-      }
+    if (!email || !password) {
+      errorMsg.textContent = "Please fill in email and password!";
+      return;
     }
-  } catch (error) {
-    console.error("Auth Error:", error);
-    errorMsg.textContent = error.message;
-  }
-});
+
+    if (password.length < 6) {
+      errorMsg.textContent = "Password must be at least 6 characters!";
+      return;
+    }
+
+    try {
+      if (isSignUp) {
+        if (!username) {
+          errorMsg.textContent = "Please enter a username!";
+          return;
+        }
+
+        const { data, error } = await supabaseClient.auth.signUp({
+          email,
+          password,
+          options: { 
+            data: { 
+              display_name: username,
+              gender: gender 
+            } 
+          }
+        });
+
+        if (error) throw error;
+        currentUser = data.user;
+        if (currentUser) {
+          if (usernameDisplay) usernameDisplay.textContent = username;
+          if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+          await syncUserProfile(currentUser, gender);
+          if (authScreen) authScreen.classList.add("hidden");
+          initRealtime();
+        }
+      } else {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (error) throw error;
+        currentUser = data.user;
+        if (currentUser) {
+          const name = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
+          if (usernameDisplay) usernameDisplay.textContent = name;
+          if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+          await syncUserProfile(currentUser);
+          if (authScreen) authScreen.classList.add("hidden");
+          initRealtime();
+        }
+      }
+    } catch (error) {
+      console.error("Auth Error:", error);
+      errorMsg.textContent = error.message;
+    }
+  });
+}
 
 // LOGOUT LOGIC
 if (logoutBtn) {
@@ -218,9 +222,9 @@ if (supabaseClient) {
   supabaseClient.auth.getSession().then(async ({ data: { session } }) => {
     if (session) {
       currentUser = session.user;
-      authScreen.classList.add("hidden");
+      if (authScreen) authScreen.classList.add("hidden");
       const currentUsername = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
-      usernameDisplay.textContent = currentUsername;
+      if (usernameDisplay) usernameDisplay.textContent = currentUsername;
 
       if (gameCreatorDisplay) {
         gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
@@ -230,7 +234,7 @@ if (supabaseClient) {
       initRealtime();
     } else {
       currentUser = null;
-      authScreen.classList.remove("hidden");
+      if (authScreen) authScreen.classList.remove("hidden");
     }
   });
 }
@@ -239,8 +243,9 @@ if (supabaseClient) {
 // ==========================================
 // 3. FRIEND SEARCH LOGIC
 // ==========================================
-const friendSearchInput = document.getElementById("friend-search-input");
-const friendSearchBtn = document.getElementById("friend-search-btn");
+const friendSearchInput = document.getElementById("search-person-input");
+const friendSearchBtn = document.getElementById("search-person-btn");
+const searchDropdown = document.getElementById("search-results-dropdown");
 
 if (friendSearchBtn) {
   friendSearchBtn.addEventListener("click", async () => {
@@ -272,38 +277,40 @@ if (friendSearchBtn) {
 }
 
 function renderSearchResults(results) {
-  if (!friendsBox) return;
+  if (!searchDropdown) return;
 
-  friendsBox.innerHTML = "";
+  searchDropdown.innerHTML = "";
+  searchDropdown.classList.remove("hidden");
 
   const validResults = results.filter(p => !currentUser || p.id !== currentUser.id);
 
   if (validResults.length === 0) {
-    friendsBox.innerHTML = `<span style="color: #888; font-style: italic;">No players found</span>`;
+    searchDropdown.innerHTML = `<div style="padding: 10px; color: #888; font-style: italic;">No players found</div>`;
     return;
   }
 
   validResults.forEach(player => {
     const item = document.createElement("div");
-    item.className = "friend-item";
+    item.className = "search-result-item";
     item.style.display = "flex";
     item.style.justifyContent = "space-between";
     item.style.alignItems = "center";
-    item.style.marginBottom = "6px";
+    item.style.padding = "8px 12px";
 
     item.innerHTML = `
-      <span>${player.username} (#${player.player_id})</span>
-      <button class="add-friend-btn" style="padding: 2px 8px; cursor: pointer; border-radius: 4px; border: none; background: #2ed573; color: white;">Add</button>
+      <span>${player.username} (#${player.player_id || 'N/A'})</span>
+      <button class="add-friend-btn" style="padding: 2px 8px; cursor: pointer; border-radius: 4px; border: none; background: #00ffcc; color: #000; font-weight: bold;">Add</button>
     `;
 
     const addBtn = item.querySelector(".add-friend-btn");
     addBtn.addEventListener("click", () => {
       addBtn.textContent = "Added!";
       addBtn.style.background = "#666";
+      addBtn.style.color = "#fff";
       addBtn.disabled = true;
     });
 
-    friendsBox.appendChild(item);
+    searchDropdown.appendChild(item);
   });
 }
 
