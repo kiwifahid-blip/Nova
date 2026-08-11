@@ -15,7 +15,7 @@ const authTitle = document.getElementById("auth-title");
 const authBtn = document.getElementById("auth-btn");
 const toggleAuthMode = document.getElementById("toggle-auth-mode");
 const usernameInput = document.getElementById("auth-username");
-const genderInput = document.getElementById("auth-gender"); // Gender Select Element
+const genderInput = document.getElementById("auth-gender");
 const emailInput = document.getElementById("auth-email");
 const passwordInput = document.getElementById("auth-password");
 const errorMsg = document.getElementById("auth-error");
@@ -24,6 +24,7 @@ const usernameDisplay = document.getElementById("username");
 const playerIdDisplay = document.getElementById("player-id-display");
 const gameCreatorDisplay = document.getElementById("game-creator");
 const friendsBox = document.getElementById("friends-box");
+const logoutBtn = document.getElementById("logout-btn");
 
 let isSignUp = true; 
 let currentUser = null;
@@ -136,6 +137,7 @@ authBtn.addEventListener("click", async (e) => {
         if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
         await syncUserProfile(currentUser, gender);
         authScreen.classList.add("hidden");
+        initRealtime();
       }
     } else {
       const { data, error } = await supabaseClient.auth.signInWithPassword({
@@ -151,6 +153,7 @@ authBtn.addEventListener("click", async (e) => {
         if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
         await syncUserProfile(currentUser);
         authScreen.classList.add("hidden");
+        initRealtime();
       }
     }
   } catch (error) {
@@ -158,6 +161,42 @@ authBtn.addEventListener("click", async (e) => {
     errorMsg.textContent = error.message;
   }
 });
+
+// LOGOUT LOGIC
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", async () => {
+    try {
+      if (isGamePlaying) {
+        stopGame();
+      } else {
+        leaveGamePresence();
+      }
+
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+
+      currentUser = null;
+      currentNumericId = null;
+      otherPlayers = {};
+
+      if (usernameDisplay) usernameDisplay.textContent = "";
+      if (playerIdDisplay) playerIdDisplay.textContent = "--";
+      if (emailInput) emailInput.value = "";
+      if (passwordInput) passwordInput.value = "";
+      if (usernameInput) usernameInput.value = "";
+
+      if (gamePageView) gamePageView.classList.add("hidden");
+      if (dashboardView) dashboardView.classList.remove("hidden");
+      if (authScreen) authScreen.classList.remove("hidden");
+
+      renderFriends([]);
+      updatePlayerCounts();
+    } catch (err) {
+      console.error("Logout Error:", err);
+    }
+  });
+}
 
 function renderFriends(friendsArray = []) {
   if (!friendsBox) return;
@@ -270,26 +309,71 @@ function renderSearchResults(results) {
 
 
 // ==========================================
-// 4. MULTIPLAYER WEBSOCKET BROADCAST SYSTEM
+// 4. GLOBAL VISIT COUNTER (SUPABASE)
 // ==========================================
 const visitCountEl = document.getElementById("visit-count");
+
+async function fetchGlobalVisits() {
+  if (!supabaseClient) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from("games")
+      .select("visits")
+      .eq("id", "main_game")
+      .single();
+
+    if (error) throw error;
+
+    if (data && visitCountEl) {
+      visitCountEl.textContent = data.visits;
+    }
+  } catch (err) {
+    console.error("Error fetching visits:", err);
+  }
+}
+
+async function incrementGlobalVisits() {
+  if (!supabaseClient) return;
+  try {
+    const { data } = await supabaseClient
+      .from("games")
+      .select("visits")
+      .eq("id", "main_game")
+      .single();
+
+    const currentVisits = data ? data.visits : 0;
+    const newVisits = currentVisits + 1;
+
+    await supabaseClient
+      .from("games")
+      .update({ visits: newVisits })
+      .eq("id", "main_game");
+
+    if (visitCountEl) visitCountEl.textContent = newVisits;
+  } catch (err) {
+    console.error("Error updating visits:", err);
+  }
+}
+
+fetchGlobalVisits();
+
+
+// ==========================================
+// 5. MULTIPLAYER WEBSOCKET BROADCAST SYSTEM
+// ==========================================
 const playingCountEl = document.getElementById("playing-count");
 const dashboardPeopleCountEl = document.getElementById("dashboard-people-count");
 
 let otherPlayers = {};
 let gameChannel = null;
-
-let totalVisits = parseInt(localStorage.getItem("nova_game_visits") || "0", 10);
-if (visitCountEl) visitCountEl.textContent = totalVisits;
-
-function updateVisitCount() {
-  totalVisits += 1;
-  localStorage.setItem("nova_game_visits", totalVisits);
-  if (visitCountEl) visitCountEl.textContent = totalVisits;
-}
+let heartbeatInterval = null;
 
 function initRealtime() {
   if (!supabaseClient) return;
+
+  if (gameChannel) {
+    supabaseClient.removeChannel(gameChannel);
+  }
 
   gameChannel = supabaseClient.channel('nova-game-room');
 
@@ -297,9 +381,6 @@ function initRealtime() {
     .on('broadcast', { event: 'player-move' }, (payload) => {
       const p = payload.payload;
       if (currentUser && p.id === currentUser.id) return;
-      
-      const prevX = otherPlayers[p.id]?.x ?? p.x;
-      const isMoving = prevX !== p.x;
 
       otherPlayers[p.id] = {
         username: p.username,
@@ -308,7 +389,7 @@ function initRealtime() {
         x: p.x,
         y: p.y,
         facingRight: p.facingRight,
-        isMoving: isMoving,
+        isMoving: p.isMoving,
         lastMsg: p.lastMsg,
         msgTimestamp: p.msgTimestamp
       };
@@ -320,9 +401,19 @@ function initRealtime() {
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        broadcastMyPosition(false);
+        const isLocalMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
+        broadcastMyPosition(isLocalMoving);
       }
     });
+
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+
+  heartbeatInterval = setInterval(() => {
+    if (isGamePlaying && !isPaused) {
+      const isLocalMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
+      broadcastMyPosition(isLocalMoving);
+    }
+  }, 100);
 }
 
 function updatePlayerCounts() {
@@ -365,7 +456,7 @@ function leaveGamePresence() {
 
 
 // ==========================================
-// 5. IN-GAME MULTIPLAYER CHAT LOGIC
+// 6. IN-GAME MULTIPLAYER CHAT LOGIC
 // ==========================================
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
@@ -388,7 +479,8 @@ if (chatForm) {
     myLastMessage = text;
     myMessageTime = Date.now();
     
-    broadcastMyPosition(false);
+    const isLocalMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
+    broadcastMyPosition(isLocalMoving);
 
     chatInput.value = "";
     chatInput.blur();
@@ -397,7 +489,7 @@ if (chatForm) {
 
 
 // ==========================================
-// 6. PAGE NAVIGATION LOGIC
+// 7. PAGE NAVIGATION LOGIC
 // ==========================================
 const dashboardView = document.getElementById("dashboard-view");
 const gamePageView = document.getElementById("game-page-view");
@@ -421,7 +513,7 @@ if (backBtn) {
 
 
 // ==========================================
-// 7. GAME ENGINE & CANVAS RENDERING
+// 8. GAME ENGINE & CANVAS RENDERING
 // ==========================================
 const gameDetailsContainer = document.getElementById("game-details-container");
 const gameCanvasContainer = document.getElementById("game-canvas-container");
@@ -433,17 +525,25 @@ const pauseMenu = document.getElementById("pause-menu");
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas ? canvas.getContext("2d") : null;
 
-// LOAD MALE SPRITES
-const maleIdle1 = new Image(); maleIdle1.crossOrigin = "anonymous"; maleIdle1.src = "https://i.imgur.com/GynwpQb.png";
-const maleIdle2 = new Image(); maleIdle2.crossOrigin = "anonymous"; maleIdle2.src = "https://i.imgur.com/2tmFG15.png";
-const maleWalk1 = new Image(); maleWalk1.crossOrigin = "anonymous"; maleWalk1.src = "https://i.imgur.com/HdoZEFA.png";
-const maleWalk2 = new Image(); maleWalk2.crossOrigin = "anonymous"; maleWalk2.src = "https://i.imgur.com/0K6RSYe.png";
+function createGameImage(src) {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.referrerPolicy = "no-referrer";
+  img.src = src;
+  return img;
+}
 
-// LOAD FEMALE SPRITES (Updated with direct image links)
-const femaleIdle1 = new Image(); femaleIdle1.crossOrigin = "anonymous"; femaleIdle1.src = "https://i.imgur.com/Q4Yyzz0.png";
-const femaleIdle2 = new Image(); femaleIdle2.crossOrigin = "anonymous"; femaleIdle2.src = "https://i.imgur.com/zuFvwky.png";
-const femaleWalk1 = new Image(); femaleWalk1.crossOrigin = "anonymous"; femaleWalk1.src = "https://i.imgur.com/eHyNVgJ.png";
-const femaleWalk2 = new Image(); femaleWalk2.crossOrigin = "anonymous"; femaleWalk2.src = "https://i.imgur.com/gdFqVVX.png";
+// MALE SPRITES
+const maleIdle1 = createGameImage("https://i.imgur.com/GynwpQb.png");
+const maleIdle2 = createGameImage("https://i.imgur.com/2tmFG15.png");
+const maleWalk1 = createGameImage("https://i.imgur.com/HdoZEFA.png");
+const maleWalk2 = createGameImage("https://i.imgur.com/0K6RSYe.png");
+
+// FEMALE SPRITES
+const femaleIdle1 = createGameImage("https://i.imgur.com/Q4Yyzz0.png");
+const femaleIdle2 = createGameImage("https://i.imgur.com/zuFvwky.png");
+const femaleWalk1 = createGameImage("https://i.imgur.com/eHyNVgJ.png");
+const femaleWalk2 = createGameImage("https://i.imgur.com/gdFqVVX.png");
 
 let globalAnimTimer = 0;
 let facingRight = true;
@@ -540,14 +640,14 @@ if (resumeBtn) {
 }
 
 if (startPlayBtn) {
-  startPlayBtn.addEventListener("click", () => {
+  startPlayBtn.addEventListener("click", async () => {
     if (gameDetailsContainer) gameDetailsContainer.classList.add("hidden");
     if (gameCanvasContainer) gameCanvasContainer.classList.remove("hidden");
     resizeCanvas();
     isGamePlaying = true;
     isPaused = false;
 
-    updateVisitCount();
+    await incrementGlobalVisits();
     updatePlayerCounts();
 
     myLastMessage = "";
@@ -575,6 +675,7 @@ if (exitGameBtn) {
 
 function stopGame() {
   leaveGamePresence();
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
   isGamePlaying = false;
   isPaused = false;
   myLastMessage = "";
@@ -637,10 +738,6 @@ function updateGame() {
     player.y = groundY - player.height;
     player.velocityY = 0;
     player.isGrounded = true;
-  }
-
-  if (moved || Math.abs(player.velocityY) > 0.1) {
-    broadcastMyPosition(moved);
   }
 }
 
@@ -732,7 +829,6 @@ function drawCharacter(px, py, username, spriteImg, isFacingRight = true, numeri
       ctx.drawImage(spriteImg, px, py, player.width, player.height);
     }
   } else {
-    // Fallback block color if image fails
     const isGirl = (gender.toLowerCase() === "female" || gender.toLowerCase() === "girl");
     ctx.fillStyle = isGirl ? "#ff78ae" : "#2ed573";
     ctx.fillRect(px, py, player.width, player.height);
