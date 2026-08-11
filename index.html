@@ -3,118 +3,121 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="referrer" content="no-referrer">
-  <title>Nova Game Hub</title>
+  <title>Nova</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
   <div id="auth-screen" class="auth-overlay">
-    <div class="auth-card">
+    <div class="auth-box">
+      <h1 class="logo-title">NOVA</h1>
       <h2 id="auth-title">Sign Up</h2>
-      <p id="auth-error" class="error-text"></p>
-      
-      <form id="auth-form" onsubmit="return false;">
-        <input type="text" id="auth-username" placeholder="Username" required />
-        
-        <select id="auth-gender" class="auth-select">
-          <option value="boy">Male 👦</option>
-          <option value="girl">Female 👧</option>
-        </select>
 
+      <form id="auth-form">
         <input type="email" id="auth-email" placeholder="Email" required />
         <input type="password" id="auth-password" placeholder="Password (min 6 chars)" required />
-        
-        <button id="auth-btn" class="primary-btn">Sign Up</button>
+        <input type="text" id="auth-username" placeholder="Username (e.g. Sparkin)" required />
+
+        <button type="button" id="auth-btn" class="main-auth-btn">Sign Up</button>
       </form>
 
-      <p class="toggle-text">
-        <span id="toggle-auth-mode">Log In</span>
+      <p class="auth-toggle">
+        Already have an account? <span id="toggle-auth-mode">Log In</span>
       </p>
+      <p id="auth-error" class="error-msg"></p>
     </div>
   </div>
 
-
-  <div id="dashboard-view" class="app-container">
-    
-    <header class="top-header">
-      <div class="user-info">
-        <span>Welcome, <strong id="username">Player</strong> (#<span id="player-id-display">--</span>)</span>
+  <div class="top-bar">
+    <div class="profile-section">
+      <div class="profile-avatar"></div>
+      <div class="profile-details">
+        <h1>Welcome, <span id="username">Loading...</span></h1>
+        <div class="player-id-badge">ID: #<span id="player-id-display">--</span></div>
       </div>
-      <button id="logout-btn" class="logout-button">Log Out</button>
-    </header>
+    </div>
 
-    <main class="dashboard-content">
-      
-      <section class="games-section">
-        <h2>Featured Games</h2>
-        
-        <div class="game-cards-grid">
-          <div class="game-card" id="open-game-btn">
-            <div class="game-thumbnail">
-              <span class="game-icon">🎮</span>
-            </div>
-            <div class="game-info">
-              <h3>Nova World</h3>
-              <p>Created by <span id="game-creator">@898</span></p>
-              <div class="game-stats">
-                <span>👁️ Visits: <strong id="visit-count">0</strong></span>
-                <span>👥 Playing: <strong id="dashboard-people-count">0</strong></span>
-              </div>
-            </div>
+    <div class="friends-box" id="friends-box"></div>
+
+    <div class="friend-search-container">
+      <div class="friend-search-bar">
+        <input type="text" id="search-person-input" placeholder="Search ID or name..." />
+        <button type="button" id="search-person-btn">Search</button>
+      </div>
+      <div id="search-results-dropdown" class="search-results-dropdown hidden"></div>
+    </div>
+  </div>
+
+  <div id="dashboard-view" class="played-section">
+    <h2>Played</h2>
+
+    <div class="game-card" id="open-game-btn">
+      <div class="game-thumbnail">
+        <div class="retro-sprite"></div>
+      </div>
+      <div class="game-info">
+        <div class="game-name">test</div>
+        <div class="people-count">People: <span id="dashboard-people-count">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="game-page-view" class="game-page hidden">
+    <button id="back-btn" class="back-btn">← Back to Home</button>
+
+    <div id="game-details-container" class="game-page-container">
+      <div class="game-preview">
+        <div class="retro-sprite large"></div>
+      </div>
+
+      <div class="game-details-info">
+        <h1 class="page-title">test</h1>
+        <p class="creator-info">By <span class="creator-name" id="game-creator">@loading</span></p>
+
+        <div class="stats-container">
+          <div class="stat-box">
+            <span class="stat-title">Visits</span>
+            <span class="stat-value" id="visit-count">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-title">Playing</span>
+            <span class="stat-value" id="playing-count">0</span>
           </div>
         </div>
-      </section>
 
-      <aside class="friends-sidebar">
-        <h3>Friends & Players</h3>
-        
-        <div class="friend-search-box">
-          <input type="text" id="friend-search-input" placeholder="Search by name or #ID..." />
-          <button id="friend-search-btn">Search</button>
-        </div>
-
-        <div id="friends-box" class="friends-list">
-          <span style="color: #666; font-style: italic;">No friends added yet</span>
-        </div>
-      </aside>
-
-    </main>
-  </div>
-
-
-  <div id="game-page-view" class="app-container hidden">
-    
-    <button id="back-btn" class="back-button">← Back to Dashboard</button>
-
-    <div id="game-details-container" class="game-banner">
-      <h1>Nova World</h1>
-      <p>Explore, hang out, and chat with friends online!</p>
-      <div class="game-meta">
-        <span>Playing: <strong id="playing-count">0</strong></span>
+        <button id="start-play-btn" class="play-btn">▶ PLAY</button>
       </div>
-      <button id="start-play-btn" class="play-btn">PLAY</button>
     </div>
 
-    <div id="game-canvas-container" class="game-viewport hidden">
+    <div id="game-canvas-container" class="fullscreen-game-overlay hidden">
       <canvas id="game-canvas"></canvas>
 
-      <div class="chat-overlay">
-        <form id="chat-form">
-          <input type="text" id="chat-input" placeholder="Press Enter to chat..." autocomplete="off" />
+      <div id="game-chat-box" class="game-chat-container">
+        <div id="chat-messages" class="chat-messages-list"></div>
+        <form id="chat-form" class="chat-form-input">
+          <input type="text" id="chat-input" placeholder="Press ENTER to chat..." maxlength="50" autocomplete="off" />
+          <button type="submit">Send</button>
         </form>
       </div>
 
-      <div id="pause-menu" class="pause-overlay hidden">
-        <div class="pause-card">
-          <h2>Game Paused</h2>
+      <div id="pause-menu" class="pause-menu-overlay hidden">
+        <div class="pause-box">
+          <h2>GAME PAUSED</h2>
+
+          <div class="controls-guide">
+            <h3>CONTROLS</h3>
+            <p><strong>A / D</strong> or <strong>← / →</strong> : Move Left / Right</p>
+            <p><strong>W</strong> or <strong>Space</strong> or <strong>↑</strong> : Jump</p>
+            <p><strong>Enter</strong> : Open / Send Chat</p>
+            <p><strong>ESC</strong> : Toggle Pause Menu</p>
+          </div>
+
           <button id="resume-btn" class="menu-btn">Resume Game</button>
-          <button id="exit-game-btn" class="menu-btn danger">Exit Game</button>
+          <button id="exit-game-btn" class="menu-btn exit-btn">Exit Game</button>
         </div>
       </div>
     </div>
-
   </div>
 
   <script src="script.js"></script>
