@@ -9,6 +9,7 @@
 </head>
 <body>
 
+  <!-- AUTH SCREEN -->
   <div id="auth-screen" class="auth-overlay">
     <div class="auth-box">
       <h1 class="logo-title">NOVA</h1>
@@ -19,9 +20,9 @@
         <input type="password" id="auth-password" placeholder="Password (min 6 chars)" required />
         <input type="text" id="auth-username" placeholder="Username (e.g. Sparkin)" required />
         
-        <select id="auth-gender" class="auth-gender-select">
-          <option value="boy">Male 👦</option>
-          <option value="girl">Female 👧</option>
+        <select id="auth-gender" style="padding: 10px; background: #222; color: #fff; border: 1px solid #00ffcc; border-radius: 4px; margin-bottom: 10px; width: 100%;">
+          <option value="boy">Boy 👦</option>
+          <option value="girl">Girl 👧</option>
         </select>
 
         <button type="button" id="auth-btn" class="main-auth-btn">Sign Up</button>
@@ -34,6 +35,7 @@
     </div>
   </div>
 
+  <!-- DASHBOARD TOP BAR -->
   <div class="top-bar">
     <div class="profile-section">
       <div class="profile-avatar"></div>
@@ -41,20 +43,21 @@
         <h1>Welcome, <span id="username">Loading...</span></h1>
         <div class="player-id-badge">ID: #<span id="player-id-display">--</span></div>
       </div>
-      <button id="logout-btn" class="logout-btn">Log Out</button>
+      <button id="logout-btn" style="margin-left: 15px; padding: 4px 10px; background: #ff0055; color: white; border: none; border-radius: 4px; cursor: pointer;">Logout</button>
     </div>
 
     <div class="friends-box" id="friends-box"></div>
 
     <div class="friend-search-container">
       <div class="friend-search-bar">
-        <input type="text" id="friend-search-input" placeholder="Search ID or name..." />
-        <button type="button" id="friend-search-btn">Search</button>
+        <input type="text" id="search-person-input" placeholder="Search ID or name..." />
+        <button type="button" id="search-person-btn">Search</button>
       </div>
       <div id="search-results-dropdown" class="search-results-dropdown hidden"></div>
     </div>
   </div>
 
+  <!-- MAIN DASHBOARD -->
   <div id="dashboard-view" class="played-section">
     <h2>Played</h2>
 
@@ -69,6 +72,7 @@
     </div>
   </div>
 
+  <!-- GAME PAGE VIEW -->
   <div id="game-page-view" class="game-page hidden">
     <button id="back-btn" class="back-btn">← Back to Home</button>
 
@@ -79,7 +83,7 @@
 
       <div class="game-details-info">
         <h1 class="page-title">test</h1>
-        <p class="creator-info">By <span class="creator-name" id="game-creator">@loading</span></p>
+        <p class="creator-info">By <span class="creator-name" id="game-creator">@Sparkin</span></p>
 
         <div class="stats-container">
           <div class="stat-box">
@@ -96,9 +100,16 @@
       </div>
     </div>
 
+    <!-- IN-GAME CANVAS OVERLAY -->
     <div id="game-canvas-container" class="fullscreen-game-overlay hidden">
+      <!-- OWNER/ADMIN BUTTON (Visible only to Owner/Admin roles) -->
+      <div id="admin-panel-btn" class="hidden" style="position: absolute; top: 15px; right: 15px; z-index: 100;">
+        <button id="open-logs-btn" style="padding: 8px 14px; background: #ffaa00; color: #000; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; box-shadow: 0 0 10px rgba(255,170,0,0.5);">📋 Owner / Admin Panel</button>
+      </div>
+
       <canvas id="game-canvas"></canvas>
 
+      <!-- IN-GAME CHAT -->
       <div id="game-chat-box" class="game-chat-container">
         <div id="chat-messages" class="chat-messages-list"></div>
         <form id="chat-form" class="chat-form-input">
@@ -107,6 +118,7 @@
         </form>
       </div>
 
+      <!-- PAUSE MENU -->
       <div id="pause-menu" class="pause-menu-overlay hidden">
         <div class="pause-box">
           <h2>GAME PAUSED</h2>
@@ -123,6 +135,24 @@
           <button id="exit-game-btn" class="menu-btn exit-btn">Exit Game</button>
         </div>
       </div>
+
+      <!-- OWNER LOGS & ADMIN MODAL -->
+      <div id="admin-modal" class="pause-menu-overlay hidden" style="z-index: 1000;">
+        <div class="pause-box" style="width: 85%; max-width: 650px; max-height: 85vh; overflow-y: auto; text-align: left; padding: 20px;">
+          <h2 style="text-align: center; color: #ffaa00; margin-top: 0;">👑 OWNER & ADMIN PANEL</h2>
+          
+          <h3 style="margin-bottom: 5px;">💬 Live Chat Logs</h3>
+          <div id="chat-logs-list" style="background: #111; padding: 10px; height: 160px; overflow-y: auto; border: 1px solid #333; border-radius: 4px; margin-bottom: 20px; font-family: monospace; font-size: 13px;"></div>
+
+          <h3 style="margin-bottom: 5px;">👥 Player Management & Bans</h3>
+          <div id="admin-player-list" style="background: #111; padding: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #333; border-radius: 4px; font-family: monospace;"></div>
+
+          <div style="text-align: center; margin-top: 20px;">
+            <button id="close-admin-btn" class="menu-btn" style="width: 200px; padding: 10px;">Close Panel</button>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
