@@ -30,8 +30,9 @@ let isSignUp = true;
 let currentUser = null;
 let currentNumericId = null;
 let currentUserGender = "boy"; 
+let currentUserRole = "player";
 
-const ORIGINAL_GAME_CREATOR = "898"; 
+const GAME_OWNER_USERNAME = "Sparkin"; 
 
 if (toggleAuthMode) {
   toggleAuthMode.addEventListener("click", () => {
@@ -63,20 +64,27 @@ async function syncUserProfile(user, selectedGender = "boy") {
   try {
     let { data, error } = await supabaseClient
       .from("players")
-      .select("player_id, username, gender")
+      .select("player_id, username, gender, role, is_banned, ban_until, ban_reason")
       .eq("id", user.id)
       .maybeSingle();
 
     if (!data) {
+      // Automatic Owner Assignment for Sparkin or fnaf 2
+      let initialRole = "player";
+      if (displayName.toLowerCase() === "sparkin" || displayName.toLowerCase() === "fnaf 2") {
+        initialRole = "owner";
+      }
+
       const insertResult = await supabaseClient
         .from("players")
         .upsert({
           id: user.id,
           username: displayName,
           gender: userGender,
+          role: initialRole,
           last_seen: new Date().toISOString()
         }, { onConflict: 'id' })
-        .select("player_id, username, gender")
+        .select("player_id, username, gender, role, is_banned, ban_until, ban_reason")
         .single();
 
       data = insertResult.data;
@@ -84,11 +92,36 @@ async function syncUserProfile(user, selectedGender = "boy") {
     }
 
     if (data) {
+      // CHECK IF BANNED
+      if (data.is_banned) {
+        const now = new Date();
+        const banExpiry = data.ban_until ? new Date(data.ban_until) : null;
+
+        if (!banExpiry || banExpiry > now) {
+          const timeLeft = banExpiry ? `Time remaining: ${Math.ceil((banExpiry - now) / (1000 * 60))} mins` : "Permanent";
+          alert(`⛔ ACCESS DENIED: You are banned!\n\nReason: ${data.ban_reason || "No reason provided"}\nDuration: ${timeLeft}`);
+          await supabaseClient.auth.signOut();
+          location.reload();
+          return;
+        }
+      }
+
       if (data.player_id) {
         currentNumericId = data.player_id;
         if (playerIdDisplay) playerIdDisplay.textContent = currentNumericId;
       }
       if (data.gender) currentUserGender = data.gender;
+      if (data.role) currentUserRole = data.role;
+
+      // Show/Hide Owner-Admin Panel Button
+      const adminBtn = document.getElementById("admin-panel-btn");
+      if (adminBtn) {
+        if (currentUserRole === "owner" || currentUserRole === "admin") {
+          adminBtn.classList.remove("hidden");
+        } else {
+          adminBtn.classList.add("hidden");
+        }
+      }
     }
   } catch (err) {
     console.error("Profile Sync Error:", err);
@@ -137,7 +170,7 @@ if (authBtn) {
         currentUser = data.user;
         if (currentUser) {
           if (usernameDisplay) usernameDisplay.textContent = username;
-          if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+          if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${GAME_OWNER_USERNAME}`;
           await syncUserProfile(currentUser, gender);
           if (authScreen) authScreen.classList.add("hidden");
           initRealtime();
@@ -153,7 +186,7 @@ if (authBtn) {
         if (currentUser) {
           const name = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
           if (usernameDisplay) usernameDisplay.textContent = name;
-          if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+          if (gameCreatorDisplay) gameCreatorDisplay.textContent = `@${GAME_OWNER_USERNAME}`;
           await syncUserProfile(currentUser);
           if (authScreen) authScreen.classList.add("hidden");
           initRealtime();
@@ -227,7 +260,7 @@ if (supabaseClient) {
       if (usernameDisplay) usernameDisplay.textContent = currentUsername;
 
       if (gameCreatorDisplay) {
-        gameCreatorDisplay.textContent = `@${ORIGINAL_GAME_CREATOR}`;
+        gameCreatorDisplay.textContent = `@${GAME_OWNER_USERNAME}`;
       }
       await syncUserProfile(currentUser);
       renderFriends([]);
@@ -316,7 +349,7 @@ function renderSearchResults(results) {
 
 
 // ==========================================
-// 4. GLOBAL VISIT COUNTER (SUPABASE)
+// 4. GLOBAL VISIT COUNTER
 // ==========================================
 const visitCountEl = document.getElementById("visit-count");
 
@@ -463,7 +496,7 @@ function leaveGamePresence() {
 
 
 // ==========================================
-// 6. IN-GAME MULTIPLAYER CHAT LOGIC
+// 6. IN-GAME CHAT & CHAT LOGS
 // ==========================================
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
@@ -489,6 +522,14 @@ if (chatForm) {
     const isLocalMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
     broadcastMyPosition(isLocalMoving);
 
+    // Save Chat Log into Supabase Database for Owners
+    const username = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
+    await supabaseClient.from("chat_logs").insert({
+      player_id: currentNumericId,
+      username: username,
+      message: text
+    });
+
     chatInput.value = "";
     chatInput.blur();
   });
@@ -496,7 +537,147 @@ if (chatForm) {
 
 
 // ==========================================
-// 7. PAGE NAVIGATION LOGIC
+// 7. OWNER & ADMIN MANAGEMENT SYSTEM
+// ==========================================
+const openLogsBtn = document.getElementById("open-logs-btn");
+const closeAdminBtn = document.getElementById("close-admin-btn");
+const adminModal = document.getElementById("admin-modal");
+
+if (openLogsBtn) {
+  openLogsBtn.addEventListener("click", async () => {
+    if (adminModal) adminModal.classList.remove("hidden");
+    await loadChatLogs();
+    await loadPlayerManagement();
+  });
+}
+
+if (closeAdminBtn) {
+  closeAdminBtn.addEventListener("click", () => {
+    if (adminModal) adminModal.classList.add("hidden");
+  });
+}
+
+function getRelativeTime(timestamp) {
+  const diffSecs = Math.floor((new Date() - new Date(timestamp)) / 1000);
+  if (diffSecs < 60) return `${diffSecs} secs ago`;
+  const diffMins = Math.floor(diffSecs / 60);
+  if (diffMins < 60) return `${diffMins} mins ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  return `${diffHours} hours ago`;
+}
+
+async function loadChatLogs() {
+  if (!supabaseClient) return;
+  const { data: logs } = await supabaseClient
+    .from("chat_logs")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(25);
+
+  const logsList = document.getElementById("chat-logs-list");
+  if (!logsList) return;
+
+  if (!logs || logs.length === 0) {
+    logsList.innerHTML = `<span style="color:#777; font-style:italic;">No chat logs available.</span>`;
+    return;
+  }
+
+  logsList.innerHTML = logs.map(l => `
+    <div style="padding: 3px 0; border-bottom: 1px solid #222;">
+      <span style="color:#ffaa00;">[${getRelativeTime(l.created_at)}]</span>
+      <strong style="color:#00ffcc;">${l.username} (#${l.player_id || 'N/A'}):</strong>
+      <span style="color:#fff;">${l.message}</span>
+    </div>
+  `).join("");
+}
+
+async function loadPlayerManagement() {
+  if (!supabaseClient) return;
+  const { data: players } = await supabaseClient
+    .from("players")
+    .select("id, player_id, username, role, is_banned")
+    .order("player_id", { ascending: true });
+
+  const playerList = document.getElementById("admin-player-list");
+  if (!playerList) return;
+
+  if (!players || players.length === 0) {
+    playerList.innerHTML = `<span style="color:#777;">No registered players found.</span>`;
+    return;
+  }
+
+  playerList.innerHTML = players.map(p => `
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #222;">
+      <span><strong>${p.username}</strong> (#${p.player_id || 'N/A'}) - <span style="color:#ffaa00;">[${p.role || 'player'}]</span> ${p.is_banned ? '<span style="color:red;">(BANNED)</span>' : ''}</span>
+      <div>
+        ${currentUserRole === 'owner' ? `
+          <button onclick="changeRank('${p.id}', 'admin')" style="background:#00ccff; color:#000; font-weight:bold; border:none; padding:3px 6px; border-radius:3px; cursor:pointer;">Admin</button>
+          <button onclick="changeRank('${p.id}', 'player')" style="background:#666; color:#fff; border:none; padding:3px 6px; border-radius:3px; cursor:pointer;">Player</button>
+        ` : ''}
+        ${p.is_banned ? `
+          <button onclick="unbanPlayer('${p.id}', '${p.username}')" style="background:#2ed573; color:#000; font-weight:bold; border:none; padding:3px 6px; border-radius:3px; cursor:pointer;">Unban</button>
+        ` : `
+          <button onclick="banPlayerPrompt('${p.id}', '${p.username}')" style="background:#ff0055; color:#fff; font-weight:bold; border:none; padding:3px 6px; border-radius:3px; cursor:pointer;">Ban</button>
+        `}
+      </div>
+    </div>
+  `).join("");
+}
+
+window.banPlayerPrompt = async function(userId, username) {
+  const reason = prompt(`Reason for banning ${username}:`);
+  if (!reason) return;
+
+  const daysStr = prompt(`Ban duration in days (Enter 0 or leave blank for Permanent):`, "0");
+  const days = parseInt(daysStr, 10);
+
+  let banUntil = null;
+  if (days > 0) {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    banUntil = date.toISOString();
+  }
+
+  await supabaseClient
+    .from("players")
+    .update({
+      is_banned: true,
+      ban_reason: reason,
+      ban_until: banUntil
+    })
+    .eq("id", userId);
+
+  alert(`${username} has been banned.`);
+  loadPlayerManagement();
+};
+
+window.unbanPlayer = async function(userId, username) {
+  await supabaseClient
+    .from("players")
+    .update({
+      is_banned: false,
+      ban_reason: null,
+      ban_until: null
+    })
+    .eq("id", userId);
+
+  alert(`${username} has been unbanned.`);
+  loadPlayerManagement();
+};
+
+window.changeRank = async function(userId, newRole) {
+  await supabaseClient
+    .from("players")
+    .update({ role: newRole })
+    .eq("id", userId);
+
+  alert(`Player role updated to ${newRole}.`);
+  loadPlayerManagement();
+};
+
+
+// ==========================================
+// 8. PAGE NAVIGATION LOGIC
 // ==========================================
 const dashboardView = document.getElementById("dashboard-view");
 const gamePageView = document.getElementById("game-page-view");
@@ -520,7 +701,7 @@ if (backBtn) {
 
 
 // ==========================================
-// 8. GAME ENGINE & CANVAS RENDERING
+// 9. GAME ENGINE & CANVAS RENDERING
 // ==========================================
 const gameDetailsContainer = document.getElementById("game-details-container");
 const gameCanvasContainer = document.getElementById("game-canvas-container");
@@ -790,7 +971,7 @@ function drawGame() {
 
   const now = Date.now();
 
-  // Draw Other Connected Players
+  // Draw Remote Players
   Object.keys(otherPlayers).forEach(id => {
     if (currentUser && id === currentUser.id) return;
     const p = otherPlayers[id];
@@ -803,7 +984,7 @@ function drawGame() {
     }
   });
 
-  // Draw Main Local Player
+  // Draw Main Player
   const isLocalMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
   const localSprite = getSpriteForPlayer(isLocalMoving, currentUserGender);
   const myName = currentUser ? (currentUser.user_metadata?.display_name || currentUser.email.split("@")[0]) : "You";
