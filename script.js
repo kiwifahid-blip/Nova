@@ -33,24 +33,25 @@ let currentUserGender = "boy";
 let currentUserRole = "player";
 
 const GAME_OWNER_USERNAME = "Sparkin"; 
+const OWNER_EMAIL = "fahid.001x@gmail.com";
 
 if (toggleAuthMode) {
   toggleAuthMode.addEventListener("click", () => {
     isSignUp = !isSignUp;
     if (isSignUp) {
-      authTitle.textContent = "Sign Up";
-      authBtn.textContent = "Sign Up";
+      if (authTitle) authTitle.textContent = "Sign Up";
+      if (authBtn) authBtn.textContent = "Sign Up";
       if (usernameInput) usernameInput.style.display = "block";
       if (genderInput) genderInput.style.display = "block";
       toggleAuthMode.textContent = "Log In";
     } else {
-      authTitle.textContent = "Log In";
-      authBtn.textContent = "Log In";
+      if (authTitle) authTitle.textContent = "Log In";
+      if (authBtn) authBtn.textContent = "Log In";
       if (usernameInput) usernameInput.style.display = "none";
       if (genderInput) genderInput.style.display = "none";
       toggleAuthMode.textContent = "Sign Up";
     }
-    errorMsg.textContent = "";
+    if (errorMsg) errorMsg.textContent = "";
   });
 }
 
@@ -69,9 +70,12 @@ async function syncUserProfile(user, selectedGender = "boy") {
       .maybeSingle();
 
     if (!data) {
-      // Automatic Owner Assignment for Sparkin or fnaf 2
+      // Assign Owner Rank to Sparkin (by username or email)
       let initialRole = "player";
-      if (displayName.toLowerCase() === "sparkin" || displayName.toLowerCase() === "fnaf 2") {
+      if (
+        displayName.toLowerCase() === "sparkin" || 
+        (user.email && user.email.toLowerCase() === OWNER_EMAIL.toLowerCase())
+      ) {
         initialRole = "owner";
       }
 
@@ -141,22 +145,22 @@ if (authBtn) {
     const username = usernameInput ? usernameInput.value.trim() : "";
     const gender = genderInput ? genderInput.value : "boy";
 
-    errorMsg.textContent = "";
+    if (errorMsg) errorMsg.textContent = "";
 
     if (!email || !password) {
-      errorMsg.textContent = "Please fill in email and password!";
+      if (errorMsg) errorMsg.textContent = "Please fill in email and password!";
       return;
     }
 
     if (password.length < 6) {
-      errorMsg.textContent = "Password must be at least 6 characters!";
+      if (errorMsg) errorMsg.textContent = "Password must be at least 6 characters!";
       return;
     }
 
     try {
       if (isSignUp) {
         if (!username) {
-          errorMsg.textContent = "Please enter a username!";
+          if (errorMsg) errorMsg.textContent = "Please enter a username!";
           return;
         }
 
@@ -199,7 +203,7 @@ if (authBtn) {
       }
     } catch (error) {
       console.error("Auth Error:", error);
-      errorMsg.textContent = error.message;
+      if (errorMsg) errorMsg.textContent = error.message;
     }
   });
 }
@@ -327,7 +331,7 @@ function renderSearchResults(results) {
     return;
   }
 
-  validResults.forEach(player => {
+  validResults.forEach(playerItem => {
     const item = document.createElement("div");
     item.className = "search-result-item";
     item.style.display = "flex";
@@ -336,7 +340,7 @@ function renderSearchResults(results) {
     item.style.padding = "8px 12px";
 
     item.innerHTML = `
-      <span>${player.username} (#${player.player_id || 'N/A'})</span>
+      <span>${playerItem.username} (#${playerItem.player_id || 'N/A'})</span>
       <button class="add-friend-btn" style="padding: 2px 8px; cursor: pointer; border-radius: 4px; border: none; background: #00ffcc; color: #000; font-weight: bold;">Add</button>
     `;
 
@@ -516,8 +520,10 @@ if (chatForm) {
     const text = chatInput.value.trim();
 
     if (!text || !currentUser || IGNORED_KEYS.includes(text)) {
-      chatInput.value = "";
-      chatInput.blur();
+      if (chatInput) {
+        chatInput.value = "";
+        chatInput.blur();
+      }
       return;
     }
 
@@ -527,7 +533,7 @@ if (chatForm) {
     const isLocalMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
     broadcastMyPosition(isLocalMoving);
 
-    // Save Chat Log into Supabase Database for Owners
+    // Save Chat Log into Supabase Database for Staff
     const username = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
     await supabaseClient.from("chat_logs").insert({
       player_id: currentNumericId,
@@ -535,8 +541,10 @@ if (chatForm) {
       message: text
     });
 
-    chatInput.value = "";
-    chatInput.blur();
+    if (chatInput) {
+      chatInput.value = "";
+      chatInput.blur();
+    }
   });
 }
 
@@ -802,7 +810,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && isGamePlaying && !isPaused) {
     if (document.activeElement !== chatInput) {
       resetKeys();
-      chatInput.focus();
+      if (chatInput) chatInput.focus();
       return;
     }
   }
@@ -810,8 +818,8 @@ window.addEventListener("keydown", (e) => {
   if (document.activeElement === chatInput) return;
 
   const keyLower = e.key.toLowerCase();
-  if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
-  if (keys.hasOwnProperty(keyLower)) keys[keyLower] = true;
+  if (Object.prototype.hasOwnProperty.call(keys, e.key)) keys[e.key] = true;
+  if (Object.prototype.hasOwnProperty.call(keys, keyLower)) keys[keyLower] = true;
 });
 
 window.addEventListener("keyup", (e) => {
@@ -819,8 +827,8 @@ window.addEventListener("keyup", (e) => {
   if (document.activeElement === chatInput) return;
 
   const keyLower = e.key.toLowerCase();
-  if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
-  if (keys.hasOwnProperty(keyLower)) keys[keyLower] = false;
+  if (Object.prototype.hasOwnProperty.call(keys, e.key)) keys[e.key] = false;
+  if (Object.prototype.hasOwnProperty.call(keys, keyLower)) keys[keyLower] = false;
 });
 
 function togglePauseMenu() {
@@ -903,16 +911,12 @@ function gameLoop() {
 }
 
 function updateGame() {
-  let moved = false;
-
   if (keys.a || keys.ArrowLeft) {
     player.velocityX = -player.speed;
     facingRight = false;
-    moved = true;
   } else if (keys.d || keys.ArrowRight) {
     player.velocityX = player.speed;
     facingRight = true;
-    moved = true;
   } else {
     player.velocityX = 0;
   }
@@ -920,7 +924,6 @@ function updateGame() {
   if ((keys.w || keys.ArrowUp || keys[" "]) && player.isGrounded) {
     player.velocityY = player.jumpStrength;
     player.isGrounded = false;
-    moved = true;
   }
 
   player.velocityY += player.gravity;
