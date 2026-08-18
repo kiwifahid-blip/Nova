@@ -43,7 +43,11 @@
         <h1>Welcome, <span id="username">Loading...</span></h1>
         <div class="player-id-badge">ID: #<span id="player-id-display">--</span></div>
       </div>
-      <button id="logout-btn" style="margin-left: 15px; padding: 4px 10px; background: #ff0055; color: white; border: none; border-radius: 4px; cursor: pointer;">Logout</button>
+
+      <!-- DASHBOARD STAFF BUTTON -->
+      <button id="dashboard-admin-btn" class="hidden" style="margin-left: 15px; padding: 6px 12px; background: #ffaa00; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer;">📋 Staff Dashboard</button>
+
+      <button id="logout-btn" style="margin-left: 10px; padding: 6px 12px; background: #ff0055; color: white; border: none; border-radius: 4px; cursor: pointer;">Logout</button>
     </div>
 
     <div class="friends-box" id="friends-box"></div>
@@ -102,7 +106,7 @@
 
     <!-- IN-GAME CANVAS OVERLAY -->
     <div id="game-canvas-container" class="fullscreen-game-overlay hidden">
-      <!-- OWNER/ADMIN BUTTON (Visible only to Owner/Admin roles) -->
+      <!-- IN-GAME PANEL BUTTON -->
       <div id="admin-panel-btn" class="hidden" style="position: absolute; top: 15px; right: 15px; z-index: 100;">
         <button id="open-logs-btn" style="padding: 8px 14px; background: #ffaa00; color: #000; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; box-shadow: 0 0 10px rgba(255,170,0,0.5);">📋 Owner / Admin Panel</button>
       </div>
@@ -136,23 +140,23 @@
         </div>
       </div>
 
-      <!-- OWNER LOGS & ADMIN MODAL -->
-      <div id="admin-modal" class="pause-menu-overlay hidden" style="z-index: 1000;">
-        <div class="pause-box" style="width: 85%; max-width: 650px; max-height: 85vh; overflow-y: auto; text-align: left; padding: 20px;">
-          <h2 style="text-align: center; color: #ffaa00; margin-top: 0;">👑 OWNER & ADMIN PANEL</h2>
-          
-          <h3 style="margin-bottom: 5px;">💬 Live Chat Logs</h3>
-          <div id="chat-logs-list" style="background: #111; padding: 10px; height: 160px; overflow-y: auto; border: 1px solid #333; border-radius: 4px; margin-bottom: 20px; font-family: monospace; font-size: 13px;"></div>
+    </div>
+  </div>
 
-          <h3 style="margin-bottom: 5px;">👥 Player Management & Bans</h3>
-          <div id="admin-player-list" style="background: #111; padding: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #333; border-radius: 4px; font-family: monospace;"></div>
+  <!-- OWNER & STAFF MODAL PANEL -->
+  <div id="admin-modal" class="pause-menu-overlay hidden" style="z-index: 1000;">
+    <div class="pause-box" style="width: 85%; max-width: 650px; max-height: 85vh; overflow-y: auto; text-align: left; padding: 20px;">
+      <h2 style="text-align: center; color: #ffaa00; margin-top: 0;">👑 OWNER & STAFF PANEL</h2>
+      
+      <h3 style="margin-bottom: 5px;">💬 Live Chat Logs</h3>
+      <div id="chat-logs-list" style="background: #111; padding: 10px; height: 160px; overflow-y: auto; border: 1px solid #333; border-radius: 4px; margin-bottom: 20px; font-family: monospace; font-size: 13px;"></div>
 
-          <div style="text-align: center; margin-top: 20px;">
-            <button id="close-admin-btn" class="menu-btn" style="width: 200px; padding: 10px;">Close Panel</button>
-          </div>
-        </div>
+      <h3 style="margin-bottom: 5px;">👥 Player Management & Bans</h3>
+      <div id="admin-player-list" style="background: #111; padding: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #333; border-radius: 4px; font-family: monospace;"></div>
+
+      <div style="text-align: center; margin-top: 20px;">
+        <button id="close-admin-btn" class="menu-btn" style="width: 200px; padding: 10px;">Close Panel</button>
       </div>
-
     </div>
   </div>
 
