@@ -113,14 +113,19 @@ async function syncUserProfile(user, selectedGender = "boy") {
       if (data.gender) currentUserGender = data.gender;
       if (data.role) currentUserRole = data.role;
 
-      // Show/Hide Owner-Admin Panel Button
-      const adminBtn = document.getElementById("admin-panel-btn");
-      if (adminBtn) {
-        if (currentUserRole === "owner" || currentUserRole === "admin") {
-          adminBtn.classList.remove("hidden");
-        } else {
-          adminBtn.classList.add("hidden");
-        }
+      // Staff Panel Buttons Toggle (Owner, Admin, Mod)
+      const isStaff = ["owner", "admin", "mod"].includes(currentUserRole.toLowerCase());
+
+      const inGameAdminBtn = document.getElementById("admin-panel-btn");
+      if (inGameAdminBtn) {
+        if (isStaff) inGameAdminBtn.classList.remove("hidden");
+        else inGameAdminBtn.classList.add("hidden");
+      }
+
+      const dashboardAdminBtn = document.getElementById("dashboard-admin-btn");
+      if (dashboardAdminBtn) {
+        if (isStaff) dashboardAdminBtn.classList.remove("hidden");
+        else dashboardAdminBtn.classList.add("hidden");
       }
     }
   } catch (err) {
@@ -537,19 +542,21 @@ if (chatForm) {
 
 
 // ==========================================
-// 7. OWNER & ADMIN MANAGEMENT SYSTEM
+// 7. OWNER & STAFF MANAGEMENT SYSTEM
 // ==========================================
 const openLogsBtn = document.getElementById("open-logs-btn");
+const dashboardAdminBtn = document.getElementById("dashboard-admin-btn");
 const closeAdminBtn = document.getElementById("close-admin-btn");
 const adminModal = document.getElementById("admin-modal");
 
-if (openLogsBtn) {
-  openLogsBtn.addEventListener("click", async () => {
-    if (adminModal) adminModal.classList.remove("hidden");
-    await loadChatLogs();
-    await loadPlayerManagement();
-  });
+async function openAdminPanel() {
+  if (adminModal) adminModal.classList.remove("hidden");
+  await loadChatLogs();
+  await loadPlayerManagement();
 }
+
+if (openLogsBtn) openLogsBtn.addEventListener("click", openAdminPanel);
+if (dashboardAdminBtn) dashboardAdminBtn.addEventListener("click", openAdminPanel);
 
 if (closeAdminBtn) {
   closeAdminBtn.addEventListener("click", () => {
@@ -606,12 +613,15 @@ async function loadPlayerManagement() {
     return;
   }
 
+  const isOwner = currentUserRole.toLowerCase() === 'owner';
+
   playerList.innerHTML = players.map(p => `
     <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #222;">
       <span><strong>${p.username}</strong> (#${p.player_id || 'N/A'}) - <span style="color:#ffaa00;">[${p.role || 'player'}]</span> ${p.is_banned ? '<span style="color:red;">(BANNED)</span>' : ''}</span>
       <div>
-        ${currentUserRole === 'owner' ? `
+        ${isOwner ? `
           <button onclick="changeRank('${p.id}', 'admin')" style="background:#00ccff; color:#000; font-weight:bold; border:none; padding:3px 6px; border-radius:3px; cursor:pointer;">Admin</button>
+          <button onclick="changeRank('${p.id}', 'mod')" style="background:#eccc68; color:#000; font-weight:bold; border:none; padding:3px 6px; border-radius:3px; cursor:pointer;">Mod</button>
           <button onclick="changeRank('${p.id}', 'player')" style="background:#666; color:#fff; border:none; padding:3px 6px; border-radius:3px; cursor:pointer;">Player</button>
         ` : ''}
         ${p.is_banned ? `
