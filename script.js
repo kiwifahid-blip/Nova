@@ -63,14 +63,19 @@ async function syncUserProfile(user, selectedGender = "boy") {
   currentUserGender = userGender;
 
   try {
+    // 1. Check if profile row exists
     let { data, error } = await supabaseClient
       .from("players")
       .select("player_id, username, gender, role, is_banned, ban_until, ban_reason")
       .eq("id", user.id)
       .maybeSingle();
 
+    if (error) {
+      console.error("Fetch profile error:", error);
+    }
+
+    // 2. If no row exists, create it
     if (!data) {
-      // Assign Owner Rank to Sparkin (by username or email)
       let initialRole = "player";
       if (
         displayName.toLowerCase() === "sparkin" || 
@@ -81,20 +86,25 @@ async function syncUserProfile(user, selectedGender = "boy") {
 
       const insertResult = await supabaseClient
         .from("players")
-        .upsert({
-          id: user.id,
-          username: displayName,
-          gender: userGender,
-          role: initialRole,
-          last_seen: new Date().toISOString()
-        }, { onConflict: 'id' })
+        .insert([
+          {
+            id: user.id,
+            username: displayName,
+            gender: userGender,
+            role: initialRole,
+            last_seen: new Date().toISOString()
+          }
+        ])
         .select("player_id, username, gender, role, is_banned, ban_until, ban_reason")
         .single();
 
       data = insertResult.data;
-      error = insertResult.error;
+      if (insertResult.error) {
+        console.error("Error creating player row:", insertResult.error);
+      }
     }
 
+    // 3. Update local state and permissions
     if (data) {
       // CHECK IF BANNED
       if (data.is_banned) {
@@ -117,7 +127,7 @@ async function syncUserProfile(user, selectedGender = "boy") {
       if (data.gender) currentUserGender = data.gender;
       if (data.role) currentUserRole = data.role;
 
-      // Staff Panel Buttons Toggle (Owner, Admin, Mod)
+      // Staff Panel Toggle Rules (Owner, Admin, Mod)
       const isStaff = ["owner", "admin", "mod"].includes(currentUserRole.toLowerCase());
 
       const inGameAdminBtn = document.getElementById("admin-panel-btn");
@@ -533,7 +543,7 @@ if (chatForm) {
     const isLocalMoving = keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight;
     broadcastMyPosition(isLocalMoving);
 
-    // Save Chat Log into Supabase Database for Staff
+    // Save Chat Log into Supabase Database
     const username = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
     await supabaseClient.from("chat_logs").insert({
       player_id: currentNumericId,
